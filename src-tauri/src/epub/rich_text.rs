@@ -1060,6 +1060,9 @@ pub fn validate_style(style: &str) -> Result<(), AppError> {
                 // expression(), @, backslashes and angle brackets.
                 | "clear"
                 | "float"
+                // Marker keywords and strings only (decimal, none, "-"...);
+                // the same guard rejects symbols() and counter().
+                | "list-style-type"
                 | "width"
                 | "height"
                 | "max-width"
@@ -1097,6 +1100,9 @@ mod copied_document_tests {
         assert_eq!(validate_document(&saved).expect("reload").0, saved);
         validate_style("border: none; border-width: 0px; border-bottom: 1px solid red; border-collapse: collapse; border-spacing: 0; padding: 0 1em; width: 80%; vertical-align: top; table-layout: auto;")
             .expect("safe table presentation");
+        validate_style("list-style-type: lower-roman; list-style-type: none;")
+            .expect("list marker keywords");
+        assert!(validate_style("list-style-type: symbols(cyclic '*')").is_err());
         // Float flow placement (e.g. headings clearing floated cover art)
         // round-trips verbatim; only keyword values have any effect.
         validate_style("clear: both; float: left;").expect("flow placement keywords");
