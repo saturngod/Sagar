@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Wuxia — Traditional Martial Arts",
+    "instruction": "Use vivid, disciplined martial-arts prose with a traditional Jianghu atmosphere. Convey honor, rivalry, loyalty, strategy, and combat precisely; keep fights clear and energetic. Distinguish masters, disciples, and rivals through appropriate dialogue and respect. Keep sects, weapons, techniques, internal energy, and titles consistent. Retain Chinese cultural concepts when literal translation loses meaning. Avoid modern slang, added heroics, or exaggerated emotions."
+  },
+  {
+    "name": "Xianxia — Immortal Cultivation",
+    "instruction": "Use serious, atmospheric cultivation-fantasy prose. Preserve the protagonist's actual temperament, including caution or ruthlessness; convey danger, breakthroughs, Daoist ideas, fate, and the pursuit of immortality without embellishment. Keep cultivation realms and stages, spiritual energies, techniques, treasures, and sect names distinct and consistent. Make vast power differences and tribulations vivid but accurate. Avoid invented lore, softened violence, or unnecessary comedy."
+  },
+  {
+    "name": "Xuanhuan — Eastern Fantasy",
+    "instruction": "Use immersive, energetic fantasy prose that adapts to each scene's wonder, danger, humor, or emotion. Describe battles, creatures, realms, artifacts, and magic clearly while preserving each novel's unique world-building. Keep ranks, bloodlines, energy types, factions, and abilities distinct and consistent; do not substitute another novel's cultivation system. Preserve character voices, strategy, and suspense without inventing lore or overdramatizing."
+  },
+  {
+    "name": "မင်းသိင်္ခ — Clear Burmese Adventure Storytelling",
+    "instruction": "Use clear, direct, engaging Burmese adventure prose: easy to follow, brisk when action rises, and rich in character presence. Let dialogue reveal personality and relationships; sustain curiosity, mystery, and narrative momentum through the original events. Use natural Burmese expressions and restrained wit where appropriate. Do not add astrology, occult lore, jokes, or revelations absent from the source; preserve foreign settings and cultural details."
+  },
+  {
+    "name": "ရွှေဥဒေါင်း — Classic Burmese Analytical Prose",
+    "instruction": "Use lucid, measured Burmese literary prose with precise observation and orderly storytelling. Preserve cause and effect, reasoning, clues, deductions, and the sequence of discoveries. Choose dignified but readable vocabulary and character-appropriate dialogue; use classical phrasing only where it fits the narrator. Keep suspense understated and never add deductions or explanations. Translate faithfully rather than relocating foreign settings into Burma."
+  },
+  {
+    "name": "ဖိုးနိုင်လင်း — Adaptive Natural Burmese Storytelling",
+    "instruction": "Make the Burmese feel naturally narrated, not literally translated. Follow the original narrator's age, viewpoint, personality, and register: conversational endings such as 'တယ်' or 'ပေါ့' suit informal voices, while 'ဖြစ်၏' or 'သို့ရာတွင်' may suit measured literary narration; never force either style. Give each character believable dialogue. Preserve subtle humor, irony, psychology, suspense, and sentence rhythm without adding commentary or ornament."
+  },
+  {
+    "name": "မြသန်းတင့် — Refined World-Literature Translation",
+    "instruction": "Use polished, fluid Burmese literary prose shaped by the original author's voice, not a fixed formal register. Convey emotional nuance, human relationships, social context, and philosophical ideas with clarity and depth. Balance precise meaning with idiomatic Burmese sentence flow; let reflective scenes breathe and action remain direct. Keep characters' speech distinct, and avoid mechanical literalism, forced archaism, embellishment, or invented interpretation."
+  }
+]
