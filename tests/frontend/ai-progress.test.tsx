@@ -19,6 +19,7 @@ mock.module("@tauri-apps/api/event", () => ({
   },
 }));
 mock.module("@tauri-apps/api/core", () => ({
+  convertFileSrc: (path: string) => path,
   invoke: async (command: string, args?: Record<string, unknown>) => {
     calls.push(command);
     if (command === "list_ai_providers") return {
@@ -26,6 +27,13 @@ mock.module("@tauri-apps/api/core", () => ({
     };
     if (command === "get_translation_selection") return {
       agent: "codex", model: "example", reasoningEffort: null, updatedAt: "",
+    };
+    if (command === "list_translation_models" && args?.agent === "qoder") return {
+      agent: "qoder", source: "live", message: "", models: [
+        { id: "dfmodel", label: "DeepSeek-Flash", reasoningEfforts: ["low", "high", "max"] },
+        { id: "auto", label: "Auto", reasoningEfforts: [] },
+        { id: "qmodel", label: "Qwen", reasoningEfforts: ["low", "medium", "xhigh"] },
+      ],
     };
     if (command === "list_translation_models") return {
       agent: args?.agent, source: "live", message: "", models: ["glm-5.3", "glm-5.3-flash", "unrelated-model"].map(id => ({ id, label: id, detail: null, reasoningEfforts: null })),
@@ -195,4 +203,39 @@ test("native API models use default effort and do not forward OpenAI overrides",
       expect(savedSelection?.reasoningEffort).toBeNull();
     }
   } finally { await act(async () => root.unmount()); container.remove(); await window.happyDOM.close(); }
+});
+
+
+test("Qoder uses each model's efforts and saves the internal ID", async () => {
+  const { TranslationModelSection } = await import("../../src/features/settings/TranslationModelSection");
+  const window = new Window();
+  Object.assign(globalThis, { window, document: window.document, navigator: window.navigator,
+    HTMLElement: window.HTMLElement, Node: window.Node, Element: window.Element, IS_REACT_ACT_ENVIRONMENT: true });
+  const container = document.createElement("div"); document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(createElement(TranslationModelSection, {
+      cli: [{ id: "qoder", label: "Qoder", binaries: ["qodercli"], available: true }], custom: [],
+    })));
+    const agent = container.querySelector<HTMLSelectElement>('[aria-label="Translation agent"]')!;
+    await act(async () => { agent.value = "qoder"; agent.dispatchEvent(new window.Event("change", { bubbles: true })); });
+    for (const [label, levels] of [
+      ["DeepSeek-Flash", ["low", "high", "max"]], ["Auto", []], ["Qwen", ["low", "medium", "xhigh"]],
+    ] as const) {
+      await act(async () => [...container.querySelectorAll<HTMLLabelElement>(".model-list__row")]
+        .find(row => row.textContent?.trim() === label)!.querySelector<HTMLInputElement>("input")!.click());
+      const effort = container.querySelector<HTMLSelectElement>('[aria-describedby="reasoning-effort-help"]')!;
+      expect([...effort.options].map(option => option.value)).toEqual(["", ...levels]);
+      expect(effort.disabled).toBe(levels.length === 0);
+      if (label === "DeepSeek-Flash") {
+        await act(async () => { effort.value = "high"; effort.dispatchEvent(new window.Event("change", { bubbles: true })); });
+        const save = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "Save")!;
+        await act(async () => save.click());
+        expect(savedSelection).toEqual({ agent: "qoder", model: "dfmodel", reasoningEffort: "high" });
+      }
+      expect(effort.value).toBe(label === "DeepSeek-Flash" ? "high" : "");
+    }
+  } finally {
+    await act(async () => root.unmount()); container.remove(); await window.happyDOM.close();
+  }
 });

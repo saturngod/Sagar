@@ -38,7 +38,6 @@ reqwest = { version = "0.13", default-features = false, features = ["blocking", 
 
 tokio = { version = "1", features = ["rt", "time"] }
 
-[dev-dependencies]
 tempfile = "3"
 
 

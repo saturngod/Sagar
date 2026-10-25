@@ -12,6 +12,7 @@ pub mod fonts;
 pub mod import;
 mod opencode_stream;
 pub mod projects;
+mod qoder;
 pub mod workspace;
 
 use tauri::{AppHandle, Manager};

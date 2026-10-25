@@ -1228,7 +1228,7 @@ pub fn validate_reasoning_effort(
         Some(vec!["low".into(), "medium".into(), "high".into()])
     } else if agent == "claude_code" {
         Some(claude_efforts(model))
-    } else if matches!(agent, "codex" | "opencode") {
+    } else if matches!(agent, "codex" | "opencode" | "qoder") {
         list_translation_models(data_dir, agent)?
             .models
             .into_iter()
@@ -1245,7 +1245,7 @@ pub fn validate_reasoning_effort(
         if !levels.iter().any(|level| level == effort) {
             return Err(invalid());
         }
-    } else if agent == "opencode"
+    } else if matches!(agent, "opencode" | "qoder")
         || ![
             "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
         ]
@@ -1486,6 +1486,16 @@ pub fn list_translation_models(
                 )),
             }
         }
+        TranslationAgent::Cli(CliProviderId::Qoder) => {
+            let binary = find_cli_or_unavailable(CliProviderId::Qoder)?;
+            let models = super::qoder::list_models(&binary, MODEL_LIST_TIMEOUT)?;
+            Ok(TranslationModelList {
+                agent: "qoder".into(),
+                source: "live".into(),
+                models,
+                message: "Live models and supported reasoning efforts from Qoder.".into(),
+            })
+        }
         TranslationAgent::Cli(CliProviderId::Agy) => {
             let binary = find_cli_or_unavailable(CliProviderId::Agy)?;
             let output = run_cli_output(&binary, &["models"], MODEL_LIST_TIMEOUT)?;
@@ -1712,6 +1722,33 @@ mod tests {
             );
             server.join().unwrap();
         }
+    }
+
+    #[test]
+    fn qoder_selection_and_binary_aliases() {
+        let dir = tempfile::tempdir().unwrap();
+        let selection = set_translation_selection(dir.path(), "qoder", "dfmodel", None).unwrap();
+        assert_eq!(selection.agent, "qoder");
+        assert_eq!(
+            get_translation_selection(dir.path())
+                .unwrap()
+                .unwrap()
+                .model,
+            "dfmodel"
+        );
+        assert!(
+            validate_reasoning_effort(dir.path(), "qoder", "dfmodel", Some("bad effort")).is_err()
+        );
+        assert_eq!(CliProviderId::parse("qoder"), Some(CliProviderId::Qoder));
+        assert!(CliProviderId::all().contains(&CliProviderId::Qoder));
+        let binary = dir
+            .path()
+            .join(format!("qoder{}", std::env::consts::EXE_SUFFIX));
+        std::fs::write(&binary, b"stub").unwrap();
+        assert_eq!(
+            find_cli_binary_in(&[dir.path().into()], CliProviderId::Qoder),
+            Some(binary)
+        );
     }
 
     #[test]

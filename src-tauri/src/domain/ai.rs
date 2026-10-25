@@ -11,6 +11,7 @@ pub enum CliProviderId {
     Opencode,
     ClaudeCode,
     Agy,
+    Qoder,
 }
 
 impl CliProviderId {
@@ -20,6 +21,7 @@ impl CliProviderId {
             CliProviderId::Opencode => "opencode",
             CliProviderId::ClaudeCode => "claude_code",
             CliProviderId::Agy => "agy",
+            CliProviderId::Qoder => "qoder",
         }
     }
 
@@ -29,6 +31,7 @@ impl CliProviderId {
             CliProviderId::Opencode => "OpenCode",
             CliProviderId::ClaudeCode => "Claude Code",
             CliProviderId::Agy => "Antigravity (agy)",
+            CliProviderId::Qoder => "Qoder",
         }
     }
 
@@ -40,6 +43,7 @@ impl CliProviderId {
             CliProviderId::Opencode => &["opencode"],
             CliProviderId::ClaudeCode => &["claude"],
             CliProviderId::Agy => &["agy"],
+            CliProviderId::Qoder => &["qodercli", "qoder"],
         }
     }
 
@@ -49,16 +53,18 @@ impl CliProviderId {
             "opencode" => Some(CliProviderId::Opencode),
             "claude_code" => Some(CliProviderId::ClaudeCode),
             "agy" => Some(CliProviderId::Agy),
+            "qoder" => Some(CliProviderId::Qoder),
             _ => None,
         }
     }
 
-    pub fn all() -> [CliProviderId; 4] {
+    pub fn all() -> [CliProviderId; 5] {
         [
             CliProviderId::Codex,
             CliProviderId::Opencode,
             CliProviderId::ClaudeCode,
             CliProviderId::Agy,
+            CliProviderId::Qoder,
         ]
     }
 }

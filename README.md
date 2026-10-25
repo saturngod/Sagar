@@ -113,6 +113,16 @@ Sagar is supporting
 - Codex
 - Claude Code
 - Open Code
+- Antigravity (agy)
+- Qoder CLI
+
+For Qoder, install `qodercli` and sign in with `qodercli login`, then select
+Qoder in Settings → AI → Translation model. Sagar loads the model IDs and
+supported reasoning efforts from your CLI. Available efforts vary by model;
+Default keeps Qoder's setting. Translation uses your Qoder account and sends
+the approved text to Qoder's model service. Sagar disables tools and MCP servers
+for these runs.
+
 ![](./assets/screen1.png)
 
 ![](./assets/screen2.png)

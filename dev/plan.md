@@ -1,5 +1,40 @@
 # Plan.md — EPUB Translation Studio
 
+### Qoder CLI provider — 2026-10-24
+
+Added Qoder to built-in CLI discovery/checks and persisted translation choices.
+Both `qodercli` and `qoder` executable names are supported. The headless CLI
+control channel loads internal model IDs, labels and per-model reasoning
+capabilities without sending a user prompt or starting inference. Effort choices
+come from `efforts` or `thinking_config.enabled.efforts`, with unsupported and
+unknown-model overrides rejected at the Rust save/execution boundaries.
+
+Translation, selected-mode batches and HTML repair use the existing headless
+process service with Qoder's stream-json output and `--reasoning-effort` flag.
+Only answer text enters progress; terminal success is required, duplicate or
+malformed completions are rejected, and daily usage exhaustion has a specific
+error message. Tools, external MCP configuration, filesystem settings and
+session persistence are disabled for these runs. Existing timeout/cancellation,
+proposal validation, consent and draft-save behavior remain in use. No JS SDK,
+Python helper or application web server was added. The existing tempfile crate
+is now a runtime dependency for isolated catalog-query directories.
+
+Verification: `cargo fmt --check` and the complete Rust suite passed (261 passed,
+6 ignored). `bun run check` passed with the existing bundle-size warning;
+frontend tests passed (97 tests, 867 assertions). Added regression coverage for
+catalog parsing/control responses, timeout cleanup, model selection persistence,
+Qoder streaming with split Myanmar UTF-8, failed/duplicate results, tool requests,
+CLI arguments and the model-specific effort picker. The installed Qoder 1.1.78
+catalog probe also passed explicitly. A synthetic generation using production
+flags confirmed tools/MCP were empty and the selected model was DeepSeek-Flash;
+it returned Qoder daily-usage error 110, so successful live generation remains
+unverified. No running Sagar build was available for rendered verification.
+Normal/minimum-size light/dark UI, native keyboard/IME behavior and Windows/Linux
+remain unverified. No milestone checkboxes changed.
+
+Next unfinished task: verify a successful Qoder translation/HTML repair and
+native provider/model/effort selection after the account usage limit resets.
+
 ### AI translation can continue in the background — 2026-10-20
 
 Whole-chapter and selected-paragraph AI runs no longer stop when their dialog

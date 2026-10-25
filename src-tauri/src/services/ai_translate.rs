@@ -336,6 +336,19 @@ pub fn agent_args(
             "--print-timeout".into(),
             "30m".into(),
         ],
+        CliProviderId::Qoder => {
+            let mut args = super::qoder::base_args();
+            args.extend([
+                "--model".into(),
+                model.into(),
+                "--include-partial-messages".into(),
+                "--permission-mode".into(),
+                "dont_ask".into(),
+                "--".into(),
+                prompt.into(),
+            ]);
+            args
+        }
         CliProviderId::ClaudeCode => vec![
             "-p".to_string(),
             prompt.to_string(),
@@ -355,13 +368,17 @@ pub fn agent_args(
                 "--config".to_string(),
                 format!("model_reasoning_effort=\"{effort}\""),
             ],
+            CliProviderId::Qoder => vec!["--reasoning-effort".into(), effort.into()],
             CliProviderId::Opencode => vec!["--variant".to_string(), effort.to_string()],
             CliProviderId::Agy | CliProviderId::ClaudeCode => {
                 vec!["--effort".to_string(), effort.to_string()]
             }
         };
         // Keep the prompt a positional argument; never interpret it as a flag.
-        let position = if matches!(id, CliProviderId::ClaudeCode | CliProviderId::Agy) {
+        let position = if matches!(
+            id,
+            CliProviderId::ClaudeCode | CliProviderId::Agy | CliProviderId::Qoder
+        ) {
             0
         } else {
             args.len() - 1
@@ -639,6 +656,7 @@ struct ProviderJsonStream {
     snapshots: std::collections::HashMap<String, String>,
     opencode_message: Option<String>,
     opencode_response: String,
+    failure_message: Option<&'static str>,
 }
 
 impl ProviderJsonStream {
@@ -653,6 +671,7 @@ impl ProviderJsonStream {
             snapshots: Default::default(),
             opencode_message: None,
             opencode_response: String::new(),
+            failure_message: None,
         }
     }
 
@@ -737,7 +756,7 @@ impl ProviderJsonStream {
                 "error" => self.failed = true,
                 _ => {}
             },
-            CliProviderId::ClaudeCode => match kind {
+            CliProviderId::ClaudeCode | CliProviderId::Qoder => match kind {
                 "stream_event" if value["parent_tool_use_id"].is_null() => {
                     let event = &value["event"];
                     if event["type"] == "content_block_delta"
@@ -748,7 +767,38 @@ impl ProviderJsonStream {
                         }
                     }
                 }
+                "assistant"
+                    if self.id == CliProviderId::Qoder && value["parent_tool_use_id"].is_null() =>
+                {
+                    if value["message"]["content"]
+                        .as_array()
+                        .is_some_and(|blocks| {
+                            blocks.iter().any(|block| block["type"] == "tool_use")
+                        })
+                    {
+                        self.failed = true;
+                    }
+                    if self.text.is_empty() {
+                        let text = value["message"]["content"]
+                            .as_array()
+                            .map(|blocks| {
+                                blocks
+                                    .iter()
+                                    .filter(|block| block["type"] == "text")
+                                    .filter_map(|block| block["text"].as_str())
+                                    .collect::<String>()
+                            })
+                            .unwrap_or_default();
+                        self.append(&text, on_text);
+                    }
+                }
                 "result" => {
+                    if self.id == CliProviderId::Qoder && value["error_code"] == 110 {
+                        self.failure_message = Some(
+                            "Qoder's daily usage limit was reached. Check your Qoder account and retry after the limit resets.",
+                        );
+                    }
+                    self.failed |= self.complete;
                     self.complete = true;
                     self.failed |=
                         value["is_error"].as_bool() != Some(false) || value["subtype"] != "success";
@@ -778,10 +828,10 @@ impl ProviderJsonStream {
         if self.failed || !self.complete || response.trim().is_empty() {
             return Err(AppError::new(
                 "translation_failed",
-                format!(
-                    "{} did not return a successful complete response. Check the CLI connection and model, then retry.",
+                self.failure_message.map(str::to_owned).unwrap_or_else(|| format!(
+                    "{} did not return a successful complete response. Check the CLI connection, account usage and model, then retry.",
                     self.id.label()
-                ),
+                )),
             ));
         }
         Ok(response.into_bytes())
@@ -872,6 +922,11 @@ fn execute_provider_streaming(
         let mut result = execute_streaming(binary, args, work_dir, cancel, timeout, |chunk| {
             stream.push(chunk, &mut on_chunk)
         })?;
+        if id == CliProviderId::Qoder {
+            let proposal = stream.finish(&mut on_chunk)?;
+            ensure_success(&result)?;
+            return Ok(proposal);
+        }
         ensure_success(&result)?;
         result.stdout = stream.finish(&mut on_chunk)?;
         return Ok(result.stdout);
@@ -1630,6 +1685,63 @@ mod tests {
     }
 
     #[test]
+    fn qoder_stream_handles_unicode_snapshots_and_terminal_result() {
+        use serde_json::json;
+        let html = "<p>မြန်မာ</p>";
+        for partial in [false, true] {
+            let mut messages = vec![json!({"type":"system","subtype":"init"})];
+            if partial {
+                messages.push(json!({"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"private"}}}));
+                messages.push(json!({"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":html}}}));
+            }
+            messages.push(json!({"type":"assistant","message":{"content":[{"type":"thinking","thinking":"private"},{"type":"text","text":html}]}}));
+            messages.push(json!({"type":"assistant","parent_tool_use_id":"nested","message":{"content":[{"type":"text","text":"ignore"}]}}));
+            messages
+                .push(json!({"type":"result","subtype":"success","is_error":false,"result":html}));
+            let (result, preview) = decode_provider_fixture(CliProviderId::Qoder, &messages);
+            assert_eq!(result.unwrap(), html.as_bytes());
+            assert_eq!(preview, html.as_bytes());
+        }
+    }
+
+    #[test]
+    fn qoder_rejects_quota_failures_tool_requests_and_duplicate_completion() {
+        use serde_json::json;
+        let success =
+            json!({"type":"result","subtype":"success","is_error":false,"result":"<p>done</p>"});
+        for messages in [
+            vec![
+                json!({"type":"result","subtype":"error_during_execution","is_error":true,"error_code":110}),
+            ],
+            vec![
+                json!({"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read"}]}}),
+                success.clone(),
+            ],
+            vec![success.clone(), success],
+        ] {
+            assert!(
+                decode_provider_fixture(CliProviderId::Qoder, &messages)
+                    .0
+                    .is_err()
+            );
+        }
+        let quota = decode_provider_fixture(CliProviderId::Qoder, &[
+            json!({"type":"result","subtype":"error_during_execution","is_error":true,"error_code":110})
+        ]).0.unwrap_err();
+        assert!(quota.message.contains("daily usage limit"));
+        let prompt = "--dangerously-skip-permissions";
+        let args = agent_args(CliProviderId::Qoder, "dfmodel", prompt, Some("high"));
+        assert_eq!(&args[args.len() - 2..], &["--", prompt]);
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == ["--reasoning-effort", "high"])
+        );
+        assert!(args.windows(2).any(|pair| pair == ["--tools", ""]));
+        assert!(args.contains(&"--strict-mcp-config".into()));
+        assert!(args.contains(&"--no-session-persistence".into()));
+    }
+
+    #[test]
     fn opencode_stream_joins_text_parts_and_ignores_tools() {
         use serde_json::json;
         let (result, preview) = decode_provider_fixture(
@@ -1654,6 +1766,7 @@ mod tests {
             CliProviderId::Codex,
             CliProviderId::Opencode,
             CliProviderId::ClaudeCode,
+            CliProviderId::Qoder,
         ] {
             assert!(decode_provider_fixture(id, &[]).0.is_err());
             assert!(
@@ -1899,6 +2012,7 @@ mod tests {
                 "model_reasoning_effort=\"xhigh\"",
             ),
             (CliProviderId::Opencode, "--variant", "xhigh"),
+            (CliProviderId::Qoder, "--reasoning-effort", "xhigh"),
             (CliProviderId::ClaudeCode, "--effort", "xhigh"),
         ] {
             let args = agent_args(agent, "model", "Translate.", Some("xhigh"));
@@ -2223,11 +2337,11 @@ mod tests {
         #[test]
         fn structured_providers_deliver_text_before_process_completion() {
             use serde_json::json;
-            let cases = [(
-                CliProviderId::ClaudeCode,
+            let cases = [CliProviderId::ClaudeCode, CliProviderId::Qoder].map(|id| (
+                id,
                 json!({"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"<p>hello</p>"}}}),
                 json!({"type":"result","subtype":"success","is_error":false,"result":"<p>hello</p>"}),
-            )];
+            ));
             for (id, text, end) in cases {
                 let stub = stub_script(&format!("echo '{}'\nsleep 1\necho '{}'", text, end));
                 let dir = tempfile::tempdir().unwrap();
