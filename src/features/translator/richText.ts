@@ -421,7 +421,10 @@ function previewUrlIsSafe(name: string, value: string): boolean {
  * network fetches and active CSS are removed while ordinary tags and text stay
  * visible so the user can review what will be inserted.
  */
-export function sanitizePreviewHtml(html: string): string {
+export function sanitizePreviewHtml(
+  html: string,
+  resolveImage?: (source: string) => string | null,
+): string {
   const doc = new DOMParser().parseFromString(html, "text/html");
   for (const element of Array.from(doc.body.querySelectorAll("*"))) {
     const tag = element.tagName.toLowerCase();
@@ -436,9 +439,23 @@ export function sanitizePreviewHtml(html: string): string {
         name === "srcdoc" ||
         name === "style" ||
         name === "srcset" ||
-        name === "sizes"
+        name === "sizes" ||
+        name === "contenteditable" ||
+        name === "tabindex" ||
+        name === "autofocus"
       ) {
         element.removeAttribute(attribute.name);
+        continue;
+      }
+      if (
+        resolveImage &&
+        ((tag === "img" && name === "src") ||
+          (tag === "image" && (name === "href" || name === "xlink:href")))
+      ) {
+        // The resolver must return only an app-owned resource or a safe image data URL.
+        const resolved = resolveImage(attribute.value);
+        if (resolved) attribute.value = resolved;
+        else element.removeAttributeNode(attribute);
         continue;
       }
       if (PREVIEW_URL_ATTRS.has(name) && !previewUrlIsSafe(name, attribute.value)) {

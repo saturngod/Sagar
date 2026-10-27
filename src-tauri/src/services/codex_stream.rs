@@ -37,6 +37,7 @@ impl Drop for Process {
 
 #[derive(Default)]
 struct Protocol {
+    instructions: String,
     stage: u8,
     thread: Option<String>,
     turn: Option<String>,
@@ -165,7 +166,7 @@ impl Protocol {
                 }
                 self.stage = 1;
                 requests.push(json!({"method":"initialized","params":{}}));
-                requests.push(json!({"id":1,"method":"thread/start","params":{"model":model,"cwd":cwd,"ephemeral":true,"approvalPolicy":"never","sandbox":"read-only"}}));
+                requests.push(json!({"id":1,"method":"thread/start","params":{"model":model,"cwd":cwd,"ephemeral":true,"approvalPolicy":"never","sandbox":"read-only","developerInstructions":self.instructions}}));
             }
             (1, Some(1)) => {
                 self.thread = v["result"]["thread"]["id"].as_str().map(str::to_owned);
@@ -191,9 +192,23 @@ impl Protocol {
     }
 }
 
+#[cfg(test)]
 pub(super) fn run(
     binary: &Path,
     args: &[String],
+    cwd: &Path,
+    cancel: &AtomicBool,
+    timeout: Duration,
+    on_text: impl FnMut(&[u8]),
+) -> Result<Vec<u8>, AppError> {
+    run_with_instructions(binary, args, "", cwd, cancel, timeout, on_text)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn run_with_instructions(
+    binary: &Path,
+    args: &[String],
+    instructions: &str,
     cwd: &Path,
     cancel: &AtomicBool,
     timeout: Duration,
@@ -249,7 +264,10 @@ pub(super) fn run(
         &json!({"id":0,"method":"initialize","params":{"clientInfo":{"name":"sagar","title":"Sagar","version":env!("CARGO_PKG_VERSION")}}}),
     )?;
     let started = Instant::now();
-    let mut protocol = Protocol::default();
+    let mut protocol = Protocol {
+        instructions: instructions.into(),
+        ..Protocol::default()
+    };
     let mut pending = Vec::new();
     while !protocol.done {
         if cancel.load(Ordering::SeqCst) {
@@ -333,11 +351,18 @@ mod tests {
     }
     #[test]
     fn handshake_preserves_model_effort_prompt_and_ephemeral_readonly_policy() {
-        let mut protocol = Protocol::default();
+        let mut protocol = Protocol {
+            instructions: "Use ဖန်ရှန်း for Fan Xian.".into(),
+            ..Protocol::default()
+        };
         let mut output = Vec::new();
         let requests = handle(&mut protocol, json!({"id":0,"result":{}}), &mut output).unwrap();
         assert_eq!(requests[0]["method"], "initialized");
         assert_eq!(requests[1]["params"]["model"], "model");
+        assert_eq!(
+            requests[1]["params"]["developerInstructions"],
+            "Use ဖန်ရှန်း for Fan Xian."
+        );
         assert_eq!(requests[1]["params"]["ephemeral"], true);
         assert_eq!(requests[1]["params"]["sandbox"], "read-only");
         assert_eq!(requests[1]["params"]["approvalPolicy"], "never");
@@ -428,8 +453,10 @@ read -r init
 echo '{"id":0,"result":{}}'
 read -r initialized
 read -r thread
+printf '%s' "$thread" > thread.json
 echo '{"id":1,"result":{"thread":{"id":"t"}}}'
 read -r turn
+printf '%s' "$turn" > turn.json
 echo '{"id":2,"result":{"turn":{"id":"u"}}}'
 printf '%s' '{"method":"item/agentMessage/delta","params":{"threadId":"t","turnId":"u","itemId":"a","delta":"<p>မြန်မာ'
 sleep 0.1
@@ -444,19 +471,42 @@ while read -r ignored; do :; done
         let started = Instant::now();
         let mut times = Vec::new();
         let mut output = Vec::new();
-        let args = vec!["--model".into(), "model".into(), "prompt".into()];
-        let result = run(
-            &binary,
-            &args,
-            dir.path(),
-            &AtomicBool::new(false),
-            Duration::from_secs(5),
-            |chunk| {
-                times.push(started.elapsed());
-                output.extend_from_slice(chunk);
-            },
-        )
-        .unwrap();
+        let request = super::super::ai_translate::build_book_translation_request(
+            Some("en"),
+            "my",
+            "<p>Fan Xian</p>",
+            "Use ဖန်ရှန်း for Fan Xian.",
+            "Use formal prose.",
+        );
+        let provider = super::super::ai_translate::TranslationProvider::Cli(
+            crate::domain::CliProviderId::Codex,
+            binary,
+        );
+        let result = provider
+            .execute(
+                "model",
+                &request,
+                Some("low"),
+                dir.path(),
+                &AtomicBool::new(false),
+                Duration::from_secs(5),
+                |chunk| {
+                    times.push(started.elapsed());
+                    output.extend_from_slice(chunk);
+                },
+                |_| {},
+            )
+            .unwrap();
+        let thread: Value =
+            serde_json::from_slice(&std::fs::read(dir.path().join("thread.json")).unwrap())
+                .unwrap();
+        let turn: Value =
+            serde_json::from_slice(&std::fs::read(dir.path().join("turn.json")).unwrap()).unwrap();
+        assert_eq!(
+            thread["params"]["developerInstructions"],
+            request.instructions
+        );
+        assert_eq!(turn["params"]["input"][0]["text"], request.input);
         assert_eq!(result, "<p>မြန်မာ</p>".as_bytes());
         assert_eq!(output, result);
         assert_eq!(times.len(), 2);

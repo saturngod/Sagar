@@ -32,6 +32,7 @@ export function useSyncedScroll(
   targetRef: RefObject<HTMLDivElement | null>,
   resetKey: string | null | undefined,
   enabled = false,
+  linkRequested = enabled,
 ) {
   // Start each chapter at the top on both sides.
   // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey intentionally retriggers the reset without being read.
@@ -40,11 +41,11 @@ export function useSyncedScroll(
     targetRef.current?.scrollTo({ top: 0 });
   }, [resetKey]);
 
-  // When linking is turned on mid-chapter, align the translation to the
-  // original's position so the effect is immediate.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: enabling intentionally snaps once without subscribing to scroll positions.
+  // Align only when the user turns linking on. Temporarily hiding a pane or
+  // entering reading mode should not move the reader back on return.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: linkRequested tracks the user's setting, independently of temporary pauses.
   useEffect(() => {
-    if (!enabled) return;
+    if (!linkRequested || !enabled) return;
     const source = sourceRef.current;
     const target = targetRef.current;
     if (!source || !target) return;
@@ -55,7 +56,7 @@ export function useSyncedScroll(
       target.scrollHeight - target.clientHeight,
     );
     if (desired !== null) target.scrollTop = desired;
-  }, [enabled]);
+  }, [linkRequested]);
 
   useEffect(() => {
     if (!enabled) return;

@@ -367,14 +367,26 @@ fn run(
     timeout: Duration,
     emit: impl FnMut(&[u8]),
 ) -> Result<Vec<u8>, AppError> {
-    run_with_status(secret, model, prompt, None, cancel, timeout, emit, |_| {})
+    run_with_status(
+        secret,
+        model,
+        &super::ai_translate::AiRequest {
+            instructions: String::new(),
+            input: prompt.into(),
+        },
+        None,
+        cancel,
+        timeout,
+        emit,
+        |_| {},
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn run_with_status(
     secret: &CustomSecret,
     model: &str,
-    prompt: &str,
+    request_data: &super::ai_translate::AiRequest,
     effort: Option<&str>,
     cancel: &AtomicBool,
     timeout: Duration,
@@ -400,12 +412,12 @@ pub(super) fn run_with_status(
                         return Err(failed("Use a valid Gemini model ID from the model list."));
                     }
                     (format!("{}/interactions", super::ai::normalize_provider_base_url(&secret.base_url, "gemini")?),
-                        json!({"model":model,"input":prompt,"stream":true,"store":false}))
+                        json!({"model":model,"system_instruction":request_data.instructions,"input":request_data.input,"stream":true,"store":false}))
                 }
                 "anthropic" => (format!("{}/messages", super::ai::normalize_provider_base_url(&secret.base_url, "anthropic")?),
-                    json!({"model":model,"max_tokens":8192,"messages":[{"role":"user","content":prompt}],"stream":true})),
+                    json!({"model":model,"max_tokens":8192,"system":request_data.instructions,"messages":[{"role":"user","content":request_data.input}],"stream":true})),
                 "openai" => {
-                    let mut body = json!({"model":model,"messages":[{"role":"user","content":prompt}],"stream":true});
+                    let mut body = json!({"model":model,"messages":[{"role":"system","content":request_data.instructions},{"role":"user","content":request_data.input}],"stream":true});
                     if let Some(effort) = effort { body["reasoning_effort"] = json!(effort); }
                     (format!("{}/chat/completions", secret.base_url), body)
                 }
@@ -573,13 +585,18 @@ mod tests {
             );
             secret.protocol = protocol.into();
             let mut emitted = Vec::new();
-            let output = run(
+            let output = run_with_status(
                 &secret,
                 "selected-model",
-                "private prompt",
+                &super::super::ai_translate::AiRequest {
+                    instructions: "Use ဖန်ရှန်း for Fan Xian.".into(),
+                    input: "private prompt".into(),
+                },
+                None,
                 &AtomicBool::new(false),
                 Duration::from_secs(3),
                 |chunk| emitted.extend_from_slice(chunk),
+                |_| {},
             )
             .unwrap();
             assert_eq!(output, "<p>မြန်မာ</p>".as_bytes());
@@ -605,12 +622,15 @@ mod tests {
             assert!(body.get("reasoning_effort").is_none());
             if protocol == "gemini" {
                 assert_eq!(body["input"], "private prompt");
+                assert_eq!(body["system_instruction"], "Use ဖန်ရှန်း for Fan Xian.");
                 assert_eq!(body["model"], "selected-model");
                 assert_eq!(body["stream"], true);
                 assert_eq!(body["store"], false);
                 assert!(body.get("previous_interaction_id").is_none());
             } else {
                 assert!(request.contains("anthropic-version: 2023-06-01"));
+                assert_eq!(body["system"], "Use ဖန်ရှန်း for Fan Xian.");
+                assert_eq!(body["messages"].as_array().unwrap().len(), 1);
                 assert_eq!(body["messages"][0]["content"], "private prompt");
                 assert_eq!(body["max_tokens"], 8192);
                 assert_eq!(body["model"], "selected-model");
@@ -647,7 +667,10 @@ mod tests {
             run_with_status(
                 &secret,
                 "models/gemini-3.8-flash",
-                "private book prompt",
+                &super::super::ai_translate::AiRequest {
+                    instructions: "Translate into Myanmar.".into(),
+                    input: "private book prompt".into(),
+                },
                 None,
                 &AtomicBool::new(false),
                 Duration::from_secs(3),
@@ -765,7 +788,7 @@ mod tests {
             secret.base_url = secret.base_url.replace("/v1", "/api/anthropic");
             let mut partial = Vec::new();
             let mut trace = Vec::new();
-            let result = run_with_status(&secret, "glm-5.3", "private prompt", None, &AtomicBool::new(false), Duration::from_secs(3), |chunk| partial.extend_from_slice(chunk), |line| trace.push(line.to_string())).unwrap();
+            let result = run_with_status(&secret, "glm-5.3", &super::super::ai_translate::AiRequest { instructions: "Translate into Myanmar.".into(), input: "private prompt".into() }, None, &AtomicBool::new(false), Duration::from_secs(3), |chunk| partial.extend_from_slice(chunk), |line| trace.push(line.to_string())).unwrap();
             assert_eq!(result, "<p>မြန်မာ</p>".as_bytes());
             assert_eq!(result, partial);
             let request = server.join().unwrap();
@@ -967,20 +990,22 @@ mod tests {
     fn http_transport_uses_saved_endpoint_key_selected_model_and_stream() {
         let (secret, server) = mock_server("200 OK", stream("<p>မြန်မာ</p>", "stop"), false);
         let mut emitted = Vec::new();
-        let prompt = super::super::ai_translate::build_book_translation_prompt(
+        let prompt = super::super::ai_translate::build_book_translation_request(
             Some("en"),
             "my",
             "<p>A synthetic story.</p>",
             "Preserve names.",
             "Use formal prose.",
         );
-        let output = run(
+        let output = run_with_status(
             &secret,
             "selected-model",
             &prompt,
+            None,
             &AtomicBool::new(false),
             Duration::from_secs(3),
             |b| emitted.extend_from_slice(b),
+            |_| {},
         )
         .unwrap();
         assert_eq!(output, emitted);
@@ -995,7 +1020,13 @@ mod tests {
         let body: Value = serde_json::from_str(request.split("\r\n\r\n").nth(1).unwrap()).unwrap();
         assert_eq!(body["model"], "selected-model");
         assert_eq!(body["stream"], true);
-        assert_eq!(body["messages"][0]["content"], prompt);
+        assert_eq!(body["messages"][0]["role"], "system");
+        assert_eq!(body["messages"][0]["content"], prompt.instructions);
+        assert_eq!(body["messages"][1]["role"], "user");
+        assert_eq!(body["messages"][1]["content"], prompt.input);
+        assert!(!prompt.input.contains("Preserve names"));
+        assert!(prompt.instructions.contains("Preserve names"));
+        assert!(!prompt.instructions.contains("<p>A synthetic story.</p>"));
         let sent = body["messages"][0]["content"].as_str().unwrap();
         assert!(sent.contains("from English (en) into Myanmar · မြန်မာ (my)"));
         assert!(sent.contains("Translation language (Book Settings): Myanmar · မြန်မာ (my)"));
@@ -1010,7 +1041,10 @@ mod tests {
         run_with_status(
             &secret,
             "m",
-            "private prompt",
+            &super::super::ai_translate::AiRequest {
+                instructions: "Translate into Myanmar.".into(),
+                input: "private prompt".into(),
+            },
             Some("low"),
             &AtomicBool::new(false),
             Duration::from_secs(3),
@@ -1100,6 +1134,11 @@ mod tests {
         let saved_before: i64 = conn
             .query_row("SELECT COUNT(*) FROM chapter_documents", [], |r| r.get(0))
             .unwrap();
+        conn.execute(
+            "UPDATE projects SET translation_instructions=?1",
+            ["Use ဖန်ရှန်း for Fan Xian."],
+        )
+        .unwrap();
         for (protocol, reason) in [
             ("openai", "stop"),
             ("gemini", "STOP"),
@@ -1138,7 +1177,7 @@ mod tests {
                         model: "glm-test".into(),
                         consent: true,
                         previous_output: previous.map(str::to_string),
-                        current_instructions: None,
+                        current_instructions: Some("Use formal prose.".into()),
                         reasoning_effort: None,
                     },
                     move |event| {
@@ -1158,9 +1197,29 @@ mod tests {
                     Some("<p>မြန်မာ</p><p>နှစ်</p>")
                 );
                 let request = server.join().unwrap();
-                if previous.is_some() {
-                    assert!(!request.contains("<p>One</p>"));
-                }
+                let payload: Value =
+                    serde_json::from_str(request.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+                let (instructions, input) = match protocol {
+                    "gemini" => (&payload["system_instruction"], &payload["input"]),
+                    "anthropic" => (&payload["system"], &payload["messages"][0]["content"]),
+                    _ => (
+                        &payload["messages"][0]["content"],
+                        &payload["messages"][1]["content"],
+                    ),
+                };
+                let instructions = instructions.as_str().unwrap();
+                assert!(instructions.contains("Use ဖန်ရှန်း for Fan Xian."));
+                assert!(instructions.contains("Use formal prose."));
+                assert_eq!(
+                    input,
+                    if previous.is_some() {
+                        "<p>Two</p>"
+                    } else {
+                        "<p>One</p><p>Two</p>"
+                    }
+                );
+                assert!(!instructions.contains("<p>One</p>"));
+                assert!(!instructions.contains("<p>Two</p>"));
             }
         }
         assert_eq!(std::fs::read(snapshot).unwrap(), before);
@@ -1221,7 +1280,20 @@ mod tests {
             };
             assert_eq!(terminal.kind, "done", "{}", terminal.message);
             assert_eq!(terminal.fixed_html.as_deref(), Some("<p>မြန်မာ</p>"));
-            server.join().unwrap();
+            let request = server.join().unwrap();
+            let payload: Value =
+                serde_json::from_str(request.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+            let (instructions, input) = match protocol {
+                "gemini" => (&payload["system_instruction"], &payload["input"]),
+                "anthropic" => (&payload["system"], &payload["messages"][0]["content"]),
+                _ => (
+                    &payload["messages"][0]["content"],
+                    &payload["messages"][1]["content"],
+                ),
+            };
+            assert!(instructions.as_str().unwrap().contains("Do NOT translate"));
+            assert!(!instructions.as_str().unwrap().contains("မြန်မာ"));
+            assert_eq!(input, "<p>မြန်မာ</p>");
         }
     }
 

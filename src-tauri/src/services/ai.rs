@@ -854,8 +854,8 @@ pub fn test_ai_custom_provider(data_dir: &Path, id: &str) -> Result<CustomTestRe
 // The Translation Model tab offers one agent (Codex / OpenCode / Claude Code
 // or a saved custom provider) plus a searchable model list. Model discovery
 // per agent:
-// - Codex: `codex debug models --bundled` (offline) then `codex debug
-//   models`, parsed defensively; a small known-models catalog on failure.
+// - Codex: `codex debug models` then `codex debug models --bundled`, parsed
+//   defensively; a small known-models catalog on failure.
 // - OpenCode: `opencode models` (local cache, no `--refresh`, so no
 //   network), parsed as `provider/model` lines.
 // - Claude Code: no machine-readable list exists, so a built-in catalog of
@@ -1427,10 +1427,18 @@ pub fn list_translation_models(
     match parsed {
         TranslationAgent::Cli(CliProviderId::Codex) => {
             let binary = find_cli_or_unavailable(CliProviderId::Codex)?;
-            // Offline-first: the bundled catalog needs no network.
-            for args in [
-                &["debug", "models", "--bundled"][..],
-                &["debug", "models"][..],
+            // Prefer the refreshed catalog; use bundled models only on failure.
+            for (args, source, message) in [
+                (
+                    &["debug", "models"][..],
+                    "live",
+                    "Live catalog from the Codex tool.",
+                ),
+                (
+                    &["debug", "models", "--bundled"][..],
+                    "catalog",
+                    "The live catalog could not be read; showing bundled models.",
+                ),
             ] {
                 if let Ok(output) = run_cli_output(&binary, args, MODEL_LIST_TIMEOUT)
                     && output.status.success()
@@ -1439,9 +1447,9 @@ pub fn list_translation_models(
                     if !models.is_empty() {
                         return Ok(TranslationModelList {
                             agent: CliProviderId::Codex.as_str().to_string(),
-                            source: "live".to_string(),
+                            source: source.to_string(),
                             models,
-                            message: "Live catalog from the Codex tool.".to_string(),
+                            message: message.to_string(),
                         });
                     }
                 }

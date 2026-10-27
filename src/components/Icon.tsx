@@ -1,4 +1,6 @@
 const paths = {
+  moreVertical:
+    "M12 4a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM12 18a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z",
   save: "M4 3h13l4 4v14H3V3h1Zm3 0v7h10V3M7 21v-7h10v7",
   languages: "M3 5h12M9 3v2M5 5c1 5 4 8 9 10M13 5c-1 5-4 8-9 10M14 21l4-10 4 10M16 17h4",
   grid: "M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm11 0h7v7h-7v-7Z",
@@ -56,6 +58,9 @@ const paths = {
   refresh:
     "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15",
   minimize: "M4 4h16v3H4V4Zm4 6h8v6H8v-6Zm-4 6h16v4H4v-4Z",
+  panelOriginal: "M3 4h18v16H3V4Zm9 0v16M5.5 8h4M5.5 11h4M5.5 14h3",
+  panelTranslation: "M3 4h18v16H3V4Zm9 0v16M14.5 8h4M14.5 11h4M14.5 14h3",
+  expand: "M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5",
 } as const;
 export type IconName = keyof typeof paths;
 export function Icon({

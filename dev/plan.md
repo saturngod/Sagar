@@ -1,5 +1,34 @@
 # Plan.md — EPUB Translation Studio
 
+### Compact pane visibility menu — 2026-10-27
+
+Replaced the two workspace pane buttons with a vertical three-dot menu. Checked
+Show Original / Show Translation items reflect visibility and retain at least one
+visible pane. Arrow/Home/End navigation, Escape focus restoration, outside-click
+and blur dismissal use the existing controls and theme tokens. Continues
+Milestone 5 UI polish; no milestone checkboxes advanced.
+
+Validation: `bun run check`, six focused reading/menu tests and `git diff --check`
+passed. A browser component fixture verified checked/disabled states, mouse and
+keyboard actions, Myanmar text, and light/dark appearance at minimum and normal
+workspace bounds. Temporary fixtures were removed. Native Tauri integration and
+Windows/Linux were not rerun. Next unfinished task: native/cross-platform
+accessibility verification and installer smoke tests. Existing bundle-size warning
+remains.
+
+### Prefer the refreshed Codex model catalog — 2026-10-27
+
+Model discovery now runs `codex debug models` first so updated models such as
+GPT-6.1 Terra can appear when returned by the installed CLI. The bundled catalog
+is used only if the refreshed command fails or returns no readable models, and
+its response is correctly identified as a fallback catalog rather than live.
+
+Verification: `cargo fmt --check`, both existing Codex catalog parser tests, and
+`git diff --check` passed. Native picker behavior and Windows/Linux were not
+verified. Next unfinished task: refresh the model picker in rebuilt native Sagar
+and confirm it includes Terra when the installed CLI lists it. No milestone
+checkboxes changed.
+
 ### Qoder CLI provider — 2026-10-24
 
 Added Qoder to built-in CLI discovery/checks and persisted translation choices.
@@ -2121,3 +2150,42 @@ Rust formatting passed; Rust library tests passed (180 passed, 2 ignored),
 including a local font discovery smoke test. Font discovery uses the cross-platform
 system-directory scanning supported by fontdb; OS-disabled or nonstandard font
 installations may not appear in the list.
+
+### Translation guidance boundary — 2026-10-24
+
+Clarified the shared chapter/selection translation prompt: saved book and
+current-run guidance are instructions, and neither their text nor headings
+may appear in translated output. Only the chapter XHTML is translation input.
+This addresses reported translation of the book-guidance heading. No milestone
+checkboxes changed. Rust formatting and the focused prompt regression passed.
+Live provider behavior remains unverified; no UI or EPUB serialization changed.
+Next unfinished task: verify a new translation with saved book instructions
+against the affected provider.
+
+### Separate translation instructions from source input — 2026-10-24
+
+Replaced the combined translation string with a typed request containing separate
+instructions and source input. Book/run guidance, language direction and output
+rules now use OpenAI-compatible system messages, Codex App Server
+`developerInstructions`, Anthropic `system`, Gemini `system_instruction`,
+Claude Code/Qoder `--system-prompt`, or OpenCode session instruction entries.
+Antigravity uses a selected temporary custom agent whose Markdown body is its
+system prompt; its source prompt contains only the input. Temporary agent files
+are removed with the existing job workspace cleanup. Selected-range context stays
+in structured user input, separate from instructions and from the text to translate.
+Whole-chapter continuation/Retry and HTML repair use the same request boundary.
+OpenCode instruction entries preserve complete Unicode and stay below its JSON
+size limit; servers rejecting that API fail visibly before source is submitted,
+without falling back to a combined prompt. No milestone checkboxes advanced.
+
+Validation: Rust formatting and the full Rust suite passed (264 passed, 6 ignored).
+Additional service regressions passed for separate book/run guidance on initial
+translation and Retry across all three HTTP protocols, HTML repair payloads,
+Codex subprocess requests, CLI argument/config separation, and selected-range
+source/context isolation. The installed Codex generated schema confirms
+`developerInstructions`; the installed OpenCode server accepted and retained a
+synthetic instruction entry (HTTP 204), with no generation. Live model generation
+and Antigravity custom-agent activation remain unverified. No frontend, UI,
+database schema or EPUB serialization changes; native UI and Windows/Linux
+execution were not tested. Next unfinished task: verify live translations with
+saved book instructions in rebuilt Sagar, including Antigravity activation.

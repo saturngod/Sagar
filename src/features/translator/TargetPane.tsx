@@ -1,6 +1,6 @@
 import { DOMSerializer, DOMParser as ProseMirrorParser } from "@tiptap/pm/model";
 import type { Editor as TiptapEditor } from "@tiptap/react";
-import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { HtmlCodeEditor } from "../../components/HtmlCode";
 import { Icon } from "../../components/Icon";
 import { StatusNotice } from "../../components/StatusNotice";
@@ -11,8 +11,14 @@ import type { ChapterContent } from "../../types/chapter";
 import { AiFixHtmlDialog } from "./AiFixHtmlDialog";
 import { AiGenerateDialog } from "./AiGenerateDialog";
 import { useAiJobs } from "./aiJobs";
+import { bookImageUrl } from "./bookImages";
 import { ChapterEditor } from "./ChapterEditor";
-import { comparableDocument, hasContent, normalizeRichDocument } from "./richText";
+import {
+  comparableDocument,
+  hasContent,
+  normalizeRichDocument,
+  sanitizePreviewHtml,
+} from "./richText";
 import type { useChapterEditor } from "./useChapterEditor";
 
 /** Local validation normally resolves in milliseconds. Bound it so a hung
@@ -52,6 +58,8 @@ export function TargetPane({
   onReloadAfterConflict,
   editor,
   scrollRef,
+  immersive,
+  onEnterReadingMode,
   aiOpen,
   onOpenAi,
   onCloseAi,
@@ -64,6 +72,8 @@ export function TargetPane({
   onReloadAfterConflict: () => void;
   editor: ReturnType<typeof useChapterEditor>;
   scrollRef?: RefObject<HTMLDivElement | null>;
+  immersive: boolean;
+  onEnterReadingMode: (trigger: HTMLElement) => void;
   aiOpen: boolean;
   onOpenAi: () => void;
   onCloseAi: () => void;
@@ -96,6 +106,15 @@ export function TargetPane({
   const currentHtml = useRef("");
   const draftHtml = editor.draft?.html ?? content?.document.html ?? "";
   currentHtml.current = draftHtml;
+  const readingHtml = useMemo(
+    () =>
+      immersive && content
+        ? sanitizePreviewHtml(draftHtml, (source) =>
+            bookImageUrl(source, `epubres://${projectId}/${content.resourceHref}`),
+          )
+        : "",
+    [content, draftHtml, immersive, projectId],
+  );
   const fileInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!activeEditor) return;
@@ -221,7 +240,11 @@ export function TargetPane({
     setView("html");
   }, [editor]);
   return (
-    <section className="pane pane--target" aria-labelledby="target-pane-heading">
+    <section
+      className={`pane pane--target${immersive ? " pane--immersive" : ""}`}
+      aria-labelledby={immersive ? undefined : "target-pane-heading"}
+      aria-label={immersive ? t("Translation chapter content") : undefined}
+    >
       <div className="pane__header">
         <h2 className="pane__heading" id="target-pane-heading">
           {t("Translation")}
@@ -332,6 +355,16 @@ export function TargetPane({
             <Icon name={editor.draft?.status === "skipped" ? "edit" : "keep"} />
           </button>
         </div>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label={t("Read translation in full view")}
+          title={t("Read translation in full view")}
+          disabled={!content || !editor.draft || loading || !!error}
+          onClick={(event) => onEnterReadingMode(event.currentTarget)}
+        >
+          <Icon name="expand" />
+        </button>
       </div>
       <div
         id="translation-formatting"
@@ -619,6 +652,29 @@ export function TargetPane({
       ) : null}
       {imageError ? <StatusNotice kind="error">{imageError}</StatusNotice> : null}
       <div className="pane__scroll" ref={scrollRef}>
+        {immersive && !loading && !error && content && editor.draft ? (
+          hasContent(draftHtml) ? (
+            <article
+              className="book-text workspace__reading-copy workspace__reading-copy--translation"
+              aria-label={t("Translation chapter content")}
+              data-reading-content
+              tabIndex={-1}
+            >
+              {/* Reading mode renders the draft through the same active-content scrubber as proposal previews. */}
+              {/* biome-ignore lint/security/noDangerouslySetInnerHtml: read-only HTML has been scrubbed for presentation */}
+              <div dangerouslySetInnerHTML={{ __html: readingHtml }} />
+            </article>
+          ) : (
+            <p
+              className="workspace__reading-empty"
+              data-reading-content
+              tabIndex={-1}
+              role="status"
+            >
+              {t("No translation has been written for this chapter yet.")}
+            </p>
+          )
+        ) : null}
         {loading ? (
           <StatusNotice kind="loading">{t("Loading chapter…")}</StatusNotice>
         ) : null}
@@ -628,7 +684,7 @@ export function TargetPane({
           </StatusNotice>
         ) : null}
         {!loading && !error && content ? (
-          <div className="chapter-document">
+          <div className="chapter-document" hidden={immersive}>
             {editor.draft?.error ? (
               <StatusNotice
                 kind="error"
@@ -688,7 +744,7 @@ export function TargetPane({
             </div>
           </div>
         ) : null}
-        {!loading && !error && !content ? (
+        {!immersive && !loading && !error && !content ? (
           <StatusNotice kind="info">{t("No chapter selected.")}</StatusNotice>
         ) : null}
       </div>

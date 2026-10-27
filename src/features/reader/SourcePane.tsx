@@ -11,12 +11,16 @@ export function SourcePane({
   loading,
   error,
   onRetry,
+  immersive,
+  onEnterReadingMode,
   scrollRef,
 }: {
   content: ChapterContent | null;
   loading: boolean;
   error: string | null;
   onRetry: () => void;
+  immersive: boolean;
+  onEnterReadingMode: (trigger: HTMLElement) => void;
   scrollRef?: RefObject<HTMLDivElement | null>;
 }) {
   const { t } = useTranslation();
@@ -46,54 +50,70 @@ export function SourcePane({
     }
   }
   return (
-    <section className="pane pane--source" aria-labelledby="source-pane-heading">
+    <section
+      className={`pane pane--source${immersive ? " pane--immersive" : ""}`}
+      aria-labelledby={immersive ? undefined : "source-pane-heading"}
+      aria-label={immersive ? t("Original chapter content") : undefined}
+    >
       <div className="pane__header">
         <h2 className="pane__heading" id="source-pane-heading">
           {t("Original")} <span className="pane__badge">{t("Read only")}</span>
         </h2>
-        <fieldset
-          className="view-switch view-switch--icons"
-          aria-label={t("Original view")}
-        >
-          {view === "html" ? (
+        <div className="pane__actions">
+          <fieldset
+            className="view-switch view-switch--icons"
+            aria-label={t("Original view")}
+          >
+            {view === "html" ? (
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={t("Copy original HTML")}
+                title={copyState === "copied" ? "HTML copied" : t("Copy original HTML")}
+                disabled={loading || !!error || !content || copyState === "copying"}
+                onClick={() => void copyHtml()}
+              >
+                <Icon name={copyState === "copied" ? "check" : "copy"} />
+              </button>
+            ) : null}
             <button
               type="button"
               className="icon-button"
-              aria-label={t("Copy original HTML")}
-              title={copyState === "copied" ? "HTML copied" : t("Copy original HTML")}
-              disabled={loading || !!error || !content || copyState === "copying"}
-              onClick={() => void copyHtml()}
+              aria-label={t("Original reader view")}
+              title={t("Reader view")}
+              aria-pressed={view === "reader"}
+              onClick={() => setView("reader")}
             >
-              <Icon name={copyState === "copied" ? "check" : "copy"} />
+              <Icon name="book" />
             </button>
-          ) : null}
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={t("Original HTML view")}
+              title={t("HTML view")}
+              aria-pressed={view === "html"}
+              onClick={() => setView("html")}
+            >
+              <Icon name="code" />
+            </button>
+          </fieldset>
           <button
             type="button"
             className="icon-button"
-            aria-label={t("Original reader view")}
-            title={t("Reader view")}
-            aria-pressed={view === "reader"}
-            onClick={() => setView("reader")}
+            aria-label={t("Read original in full view")}
+            title={t("Read original in full view")}
+            disabled={!content || loading || !!error}
+            onClick={(event) => onEnterReadingMode(event.currentTarget)}
           >
-            <Icon name="book" />
+            <Icon name="expand" />
           </button>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={t("Original HTML view")}
-            title={t("HTML view")}
-            aria-pressed={view === "html"}
-            onClick={() => setView("html")}
-          >
-            <Icon name="code" />
-          </button>
-        </fieldset>
+        </div>
       </div>
       <div className="pane__scroll" ref={scrollRef}>
-        {copyState === "copied" ? (
+        {!immersive && copyState === "copied" ? (
           <StatusNotice kind="success">{t("Original HTML copied.")}</StatusNotice>
         ) : null}
-        {copyState === "error" ? (
+        {!immersive && copyState === "error" ? (
           <StatusNotice
             kind="error"
             onRetry={() => void copyHtml()}
@@ -110,7 +130,22 @@ export function SourcePane({
             {error}
           </StatusNotice>
         ) : null}
-        {!loading && !error && content ? (
+        {immersive && !loading && !error && content ? (
+          <article
+            className="book-text workspace__reading-copy"
+            aria-label={t("Original chapter content")}
+            data-reading-content
+            tabIndex={-1}
+            onClick={interceptLinkClicks}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.target as HTMLElement).closest("a"))
+                event.preventDefault();
+            }}
+          >
+            <div dangerouslySetInnerHTML={{ __html: content.previewHtml }} />
+          </article>
+        ) : null}
+        {!immersive && !loading && !error && content ? (
           view === "html" ? (
             <HtmlCode value={content.sourceDocument} />
           ) : (
@@ -127,7 +162,7 @@ export function SourcePane({
             </article>
           )
         ) : null}
-        {!loading && !error && !content ? (
+        {!immersive && !loading && !error && !content ? (
           <StatusNotice kind="info">{t("No chapter selected.")}</StatusNotice>
         ) : null}
       </div>

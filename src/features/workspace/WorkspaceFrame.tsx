@@ -29,6 +29,8 @@ import { TargetPane } from "../translator/TargetPane";
 import { useChapterEditor } from "../translator/useChapterEditor";
 import { BookSettingsDialog } from "./BookSettingsDialog";
 import { LanguageDialog } from "./LanguageDialog";
+import { PaneVisibilityMenu } from "./PaneVisibilityMenu";
+import { ReadingControls } from "./ReadingControls";
 import { useSyncedScroll } from "./useSyncedScroll";
 
 type ProjectState =
@@ -73,16 +75,27 @@ export function WorkspaceFrame({
   const [sourceWidth, setSourceWidth] = useState(loadSourceWidth);
   const [scrollSyncEnabled, setScrollSyncEnabled] = useState(loadScrollSync);
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [visiblePanes, setVisiblePanes] = useState({
+    original: true,
+    translation: true,
+  });
+  const [readingPane, setReadingPane] = useState<"original" | "translation" | null>(null);
+  const [chapterSwitching, setChapterSwitching] = useState(false);
+  const [readingNavigationFailed, setReadingNavigationFailed] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportOutcome, setExportOutcome] = useState<ExportOutcome | null>(null);
   const [langOpen, setLangOpen] = useState(false);
   const [bookSettingsOpen, setBookSettingsOpen] = useState(false);
   const [aiChapterId, setAiChapterId] = useState<string | null>(null);
   const readingRef = useRef<HTMLDivElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const readingReturnFocus = useRef<HTMLElement | null>(null);
+  const chapterSwitchingRef = useRef(false);
   const loadSequence = useRef(0);
   const contentRef = useRef<ChapterContent | null>(null);
   const sourceScrollRef = useRef<HTMLDivElement | null>(null);
   const targetScrollRef = useRef<HTMLDivElement | null>(null);
+  const bothPanesVisible = visiblePanes.original && visiblePanes.translation;
 
   const loadChapter = useCallback(
     (chapterId: string) => {
@@ -149,7 +162,13 @@ export function WorkspaceFrame({
     contentState.status === "ready" ? contentState.content : null,
   );
 
-  useSyncedScroll(sourceScrollRef, targetScrollRef, activeChapterId, scrollSyncEnabled);
+  useSyncedScroll(
+    sourceScrollRef,
+    targetScrollRef,
+    activeChapterId,
+    scrollSyncEnabled && bothPanesVisible && !readingPane,
+    scrollSyncEnabled,
+  );
 
   const toggleScrollSync = useCallback(() => {
     setScrollSyncEnabled((current) => {
@@ -159,19 +178,87 @@ export function WorkspaceFrame({
     });
   }, []);
 
+  const togglePaneVisibility = useCallback((pane: "original" | "translation") => {
+    setVisiblePanes((current) => {
+      const otherPane = pane === "original" ? "translation" : "original";
+      if (current[pane] && !current[otherPane]) {
+        return current;
+      }
+      return { ...current, [pane]: !current[pane] };
+    });
+  }, []);
+
+  const enterReadingMode = useCallback(
+    (pane: "original" | "translation", trigger: HTMLElement) => {
+      readingReturnFocus.current = trigger;
+      setReadingNavigationFailed(false);
+      setReadingPane(pane);
+    },
+    [],
+  );
+
+  const closeReadingMode = useCallback(() => {
+    setReadingNavigationFailed(false);
+    setReadingPane(null);
+  }, []);
+
+  useEffect(() => {
+    if (readingPane) {
+      return;
+    }
+    const target = readingReturnFocus.current;
+    readingReturnFocus.current = null;
+    if (target) {
+      const frame = requestAnimationFrame(() => {
+        const destination =
+          target.isConnected && !target.matches(":disabled")
+            ? target
+            : workspaceRef.current?.querySelector<HTMLElement>(
+                ".workspace__toolbar button:not(:disabled)",
+              );
+        destination?.focus({ preventScroll: true });
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [readingPane]);
+
+  const readyChapterId =
+    contentState.status === "ready" ? contentState.content.chapterId : null;
+  useEffect(() => {
+    if (!readingPane || !readyChapterId) return;
+    const frame = requestAnimationFrame(() => {
+      workspaceRef.current
+        ?.querySelector<HTMLElement>("[data-reading-content]")
+        ?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [readingPane, readyChapterId]);
+
   const selectChapter = useCallback(
     (chapterId: string) => {
-      if (chapterId === activeChapterId) {
+      if (chapterId === activeChapterId || chapterSwitchingRef.current) {
         return;
       }
       // Flush pending writes before navigation; keep the current chapter if
       // saving fails so work is never silently discarded.
-      void editor.flushAll().then((ok) => {
-        if (ok) {
+      chapterSwitchingRef.current = true;
+      setChapterSwitching(true);
+      setReadingNavigationFailed(false);
+      void editor
+        .flushAll()
+        .then((ok) => {
+          if (!ok) {
+            setReadingNavigationFailed(true);
+            return;
+          }
           setActiveChapterId(chapterId);
           loadChapter(chapterId);
-        }
-      });
+        })
+        .catch(() => setReadingNavigationFailed(true))
+        .finally(() => {
+          chapterSwitchingRef.current = false;
+          setChapterSwitching(false);
+        });
     },
     [activeChapterId, editor, loadChapter],
   );
@@ -229,11 +316,23 @@ export function WorkspaceFrame({
   const chapters = projectState.status === "ready" ? projectState.chapters : [];
   const project = projectState.status === "ready" ? projectState.project : null;
   const content = contentState.status === "ready" ? contentState.content : null;
-  const activeChapter =
-    chapters.find((chapter) => chapter.id === activeChapterId) ?? null;
+  const activeIndex = chapters.findIndex((chapter) => chapter.id === activeChapterId);
+  const activeChapter = chapters[activeIndex] ?? null;
+  const previousChapter = activeIndex > 0 ? chapters[activeIndex - 1] : undefined;
+  const nextChapter = activeIndex >= 0 ? chapters[activeIndex + 1] : undefined;
+  const chapterNavigationBusy = chapterSwitching || contentState.status === "loading";
+  const panesWidth =
+    readingRef.current?.parentElement?.getBoundingClientRect().width || 1125;
+  const defaultSourceWidth = Math.min(
+    1400,
+    Math.max(320, Math.round((panesWidth - 5) / 2)),
+  );
 
   return (
-    <div className="workspace">
+    <div
+      ref={workspaceRef}
+      className={`workspace${readingPane ? " workspace--reading" : ""}`}
+    >
       <header className="workspace__toolbar">
         <button
           type="button"
@@ -265,7 +364,7 @@ export function WorkspaceFrame({
           <ChapterPicker
             chapters={chapters}
             chapterId={activeChapterId}
-            disabled={!chapters.length || contentState.status === "loading"}
+            disabled={!chapters.length || chapterNavigationBusy}
             onSelect={selectChapter}
           />
           <div className="workspace__chapter-actions">
@@ -274,16 +373,9 @@ export function WorkspaceFrame({
               className="icon-button"
               aria-label={t("Previous chapter")}
               title={t("Previous chapter")}
-              disabled={
-                !activeChapter ||
-                activeChapter.spineIndex === 0 ||
-                contentState.status === "loading"
-              }
+              disabled={!previousChapter || chapterNavigationBusy}
               onClick={() => {
-                const index = chapters.findIndex(
-                  (chapter) => chapter.id === activeChapterId,
-                );
-                if (chapters[index - 1]) selectChapter(chapters[index - 1].id);
+                if (previousChapter) selectChapter(previousChapter.id);
               }}
             >
               <Icon name="left" />
@@ -293,16 +385,9 @@ export function WorkspaceFrame({
               className="icon-button"
               aria-label={t("Next chapter")}
               title={t("Next chapter")}
-              disabled={
-                !activeChapter ||
-                activeChapter.spineIndex === chapters.length - 1 ||
-                contentState.status === "loading"
-              }
+              disabled={!nextChapter || chapterNavigationBusy}
               onClick={() => {
-                const index = chapters.findIndex(
-                  (chapter) => chapter.id === activeChapterId,
-                );
-                if (chapters[index + 1]) selectChapter(chapters[index + 1].id);
+                if (nextChapter) selectChapter(nextChapter.id);
               }}
             >
               <Icon name="right" />
@@ -352,6 +437,7 @@ export function WorkspaceFrame({
         >
           <Icon name="settings" />
         </button>
+        <PaneVisibilityMenu visible={visiblePanes} onToggle={togglePaneVisibility} />
       </header>
 
       {projectState.status === "loading" ? (
@@ -421,8 +507,9 @@ export function WorkspaceFrame({
           <div
             ref={readingRef}
             className="workspace__reading"
+            hidden={!visiblePanes.original || readingPane === "translation"}
             style={
-              sourceWidth > 0
+              bothPanesVisible && !readingPane && sourceWidth > 0
                 ? { flex: `0 0 clamp(220px, ${sourceWidth}px, calc(100% - 245px))` }
                 : undefined
             }
@@ -432,36 +519,43 @@ export function WorkspaceFrame({
               loading={contentState.status === "loading"}
               error={contentState.status === "error" ? contentState.message : null}
               onRetry={reloadAfterConflict}
+              immersive={readingPane === "original"}
+              onEnterReadingMode={(trigger) => enterReadingMode("original", trigger)}
               scrollRef={sourceScrollRef}
             />
           </div>
-          <Splitter
-            label="Resize source and translation panes"
-            orientation="vertical"
-            value={
-              sourceWidth === 0
-                ? (readingRef.current?.getBoundingClientRect().width ?? 560)
-                : sourceWidth
-            }
-            min={320}
-            max={1400}
-            onChange={persistSource}
-          />
-          <TargetPane
-            projectId={projectId}
-            content={content}
-            loading={contentState.status === "loading"}
-            error={contentState.status === "error" ? contentState.message : null}
-            onRetry={reloadAfterConflict}
-            onReloadAfterConflict={reloadAfterConflict}
-            editor={editor}
-            scrollRef={targetScrollRef}
-            aiOpen={aiChapterId !== null && aiChapterId === content?.chapterId}
-            onOpenAi={() => {
-              if (content) setAiChapterId(content.chapterId);
-            }}
-            onCloseAi={() => setAiChapterId(null)}
-          />
+          {bothPanesVisible && !readingPane ? (
+            <Splitter
+              label="Resize source and translation panes"
+              orientation="vertical"
+              value={sourceWidth === 0 ? defaultSourceWidth : sourceWidth}
+              min={320}
+              max={1400}
+              onChange={persistSource}
+            />
+          ) : null}
+          <div
+            className="workspace__translation"
+            hidden={!visiblePanes.translation || readingPane === "original"}
+          >
+            <TargetPane
+              projectId={projectId}
+              content={content}
+              loading={contentState.status === "loading"}
+              error={contentState.status === "error" ? contentState.message : null}
+              onRetry={reloadAfterConflict}
+              onReloadAfterConflict={reloadAfterConflict}
+              editor={editor}
+              scrollRef={targetScrollRef}
+              immersive={readingPane === "translation"}
+              onEnterReadingMode={(trigger) => enterReadingMode("translation", trigger)}
+              aiOpen={aiChapterId !== null && aiChapterId === content?.chapterId}
+              onOpenAi={() => {
+                if (content) setAiChapterId(content.chapterId);
+              }}
+              onCloseAi={() => setAiChapterId(null)}
+            />
+          </div>
         </div>
       </div>
 
@@ -496,6 +590,44 @@ export function WorkspaceFrame({
           </button>
         ) : null}
       </footer>
+
+      {readingPane ? (
+        <ReadingControls
+          key={readingPane}
+          workspaceRef={workspaceRef}
+          scrollRef={readingPane === "original" ? sourceScrollRef : targetScrollRef}
+          canGoPrevious={!!previousChapter && !chapterNavigationBusy}
+          canGoNext={!!nextChapter && !chapterNavigationBusy}
+          navigationBusy={chapterNavigationBusy}
+          onPrevious={() => {
+            if (previousChapter) selectChapter(previousChapter.id);
+          }}
+          onNext={() => {
+            if (nextChapter) selectChapter(nextChapter.id);
+          }}
+          onClose={closeReadingMode}
+        />
+      ) : null}
+      {readingPane && readingNavigationFailed ? (
+        <div className="workspace__reading-feedback">
+          <StatusNotice
+            kind="error"
+            action={
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={t("Close reading view (Esc)")}
+                title={t("Close reading view (Esc)")}
+                onClick={closeReadingMode}
+              >
+                <Icon name="close" />
+              </button>
+            }
+          >
+            {editor.draft?.error ?? t("Couldn't save · see chapter")}
+          </StatusNotice>
+        </div>
+      ) : null}
 
       {langOpen && project ? (
         <LanguageDialog

@@ -431,9 +431,40 @@ enum Wire {
     Failed,
 }
 
+#[cfg(test)]
 pub(super) fn run(
     binary: &Path,
     args: &[String],
+    cwd: &Path,
+    cancel: &AtomicBool,
+    timeout: Duration,
+    on_text: impl FnMut(&[u8]),
+) -> Result<Vec<u8>, AppError> {
+    run_with_instructions(binary, args, "", cwd, cancel, timeout, on_text)
+}
+
+// Instruction entries are limited to 8 KiB of serialized JSON. Bound chunks by
+// characters so JSON escaping and multibyte scripts fit without truncating text.
+fn instruction_chunks(instructions: &str) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut chunk = String::new();
+    for character in instructions.chars() {
+        chunk.push(character);
+        if chunk.chars().count() == 1000 {
+            chunks.push(std::mem::take(&mut chunk));
+        }
+    }
+    if !chunk.is_empty() {
+        chunks.push(chunk);
+    }
+    chunks
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn run_with_instructions(
+    binary: &Path,
+    args: &[String],
+    instructions: &str,
     cwd: &Path,
     cancel: &AtomicBool,
     timeout: Duration,
@@ -497,6 +528,23 @@ pub(super) fn run(
         .ok_or_else(failed)?
         .to_string();
     server.session = Some(id.clone());
+    for (index, chunk) in instruction_chunks(instructions).iter().enumerate() {
+        check(cancel, started, timeout)?;
+        let response = server
+            .request(
+                reqwest::Method::PUT,
+                &format!("/api/experimental/session/{id}/instructions/entries/sagar-{index:06}"),
+            )
+            .json(&json!({"value":{"instructions":chunk}}))
+            .send()
+            .map_err(|_| failed())?;
+        if !response.status().is_success() {
+            return Err(AppError::new(
+                "instructions_unsupported",
+                "OpenCode could not accept translation instructions. Update OpenCode or choose another provider.",
+            ));
+        }
+    }
     // The SSE stream lifetime is bounded by the polling loops below via
     // `check`. Give the underlying request headroom so reqwest's own timeout
     // cannot fire at the same instant as the translation deadline and mask a
@@ -656,6 +704,22 @@ mod tests {
             json!({"sessionID":"ses_test"}),
         )
     }
+    #[test]
+    fn instruction_entries_preserve_unicode_and_fit_the_json_limit() {
+        let instructions = "Use မြန်မာ combining marks \"\n\t\u{0001}".repeat(1500);
+        let chunks = instruction_chunks(&instructions);
+        assert!(chunks.len() > 1);
+        assert_eq!(chunks.concat(), instructions);
+        for chunk in chunks {
+            assert!(
+                serde_json::to_vec(&json!({"instructions":chunk}))
+                    .unwrap()
+                    .len()
+                    < 8192
+            );
+        }
+    }
+
     #[test]
     fn provider_errors_explain_status_without_echoing_sensitive_output() {
         let error = provider_error(
@@ -839,7 +903,13 @@ mod tests {
             os::unix::fs::PermissionsExt,
             sync::{Arc, Mutex},
         };
-        for mode in ["success", "cancel", "timeout", "permission"] {
+        for mode in [
+            "success",
+            "cancel",
+            "timeout",
+            "permission",
+            "instructions-rejected",
+        ] {
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
             let addr = listener.local_addr().unwrap();
             let base = format!("http://{addr}");
@@ -913,7 +983,14 @@ mod tests {
                     } else {
                         "true"
                     };
-                    socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{response}",response.len()).as_bytes()).unwrap();
+                    let status = if mode == "instructions-rejected"
+                        && request.starts_with("PUT /api/experimental/")
+                    {
+                        "404 Not Found"
+                    } else {
+                        "200 OK"
+                    };
+                    socket.write_all(format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{response}",response.len()).as_bytes()).unwrap();
                     if request.ends_with("/prompt") {
                         let stream = events.as_mut().unwrap();
                         for v in [step_started(), text_started(), delta("<p>မြန်မာ")] {
@@ -964,13 +1041,21 @@ mod tests {
             } else {
                 Duration::from_secs(5)
             };
-            let result = run(&binary, &args, dir.path(), &cancel, timeout, |chunk| {
-                arrivals.push(started.elapsed());
-                output.extend_from_slice(chunk);
-                if mode == "cancel" {
-                    cancel.store(true, Ordering::SeqCst);
-                }
-            });
+            let result = run_with_instructions(
+                &binary,
+                &args,
+                "Use ဖန်ရှန်း for Fan Xian.",
+                dir.path(),
+                &cancel,
+                timeout,
+                |chunk| {
+                    arrivals.push(started.elapsed());
+                    output.extend_from_slice(chunk);
+                    if mode == "cancel" {
+                        cancel.store(true, Ordering::SeqCst);
+                    }
+                },
+            );
             // The mock must exit even when the run ends without its own
             // cleanup DELETE (a timeout can expire during startup).
             // Connecting fails once the mock already exited via the DELETE.
@@ -1004,6 +1089,8 @@ mod tests {
                         "translation_cancelled"
                     } else if mode == "permission" {
                         "opencode_tool_requested"
+                    } else if mode == "instructions-rejected" {
+                        "instructions_unsupported"
                     } else {
                         "translation_timeout"
                     }
@@ -1016,6 +1103,15 @@ mod tests {
             // answer, a cancelled delta or a tool request — may assert on
             // them; timeout mode may only require cleanup once a session
             // exists, because startup may legitimately consume the budget.
+            if mode == "instructions-rejected" {
+                assert!(!calls.iter().any(|(path, _)| path.ends_with("/prompt")));
+                assert!(
+                    calls
+                        .iter()
+                        .any(|(path, _)| path == "DELETE /api/session/ses_test")
+                );
+                continue;
+            }
             if mode == "timeout" {
                 if calls.iter().any(|(path, _)| path == "POST /api/session") {
                     assert!(
@@ -1048,6 +1144,21 @@ mod tests {
                 .unwrap()
                 .1;
             assert_eq!(prompt["text"], "Translate.");
+            let instruction_at = calls
+                .iter()
+                .position(|(path, _)| {
+                    path.starts_with("PUT /api/experimental/session/ses_test/instructions/entries/")
+                })
+                .unwrap();
+            let prompt_at = calls
+                .iter()
+                .position(|(path, _)| path.ends_with("/prompt"))
+                .unwrap();
+            assert!(instruction_at < prompt_at);
+            assert_eq!(
+                calls[instruction_at].1["value"]["instructions"],
+                "Use ဖန်ရှန်း for Fan Xian."
+            );
             assert!(
                 calls
                     .iter()
