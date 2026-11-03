@@ -35,6 +35,8 @@ recorded evidence on the named OS; nothing is marked verified without it.
 ## Platforms
 
 - [x] macOS (Apple Silicon): unit/integration suites, dev boot, UI smoke.
+- [ ] macOS (Intel): GitHub release build, install, run, import/export,
+      Myanmar shaping (release target configured; execution unverified).
 - [ ] Windows: install, run, import/export, Myanmar shaping (untested).
 - [ ] Linux: install, run, import/export, Myanmar shaping (untested).
 - [x] macOS (Apple Silicon) bundle: `bun tauri build` produced

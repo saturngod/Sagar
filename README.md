@@ -35,7 +35,8 @@ git push origin <branch> v0.1.4                   # pre-push re-validates before
 ```
 
 Pushing a `v*` tag triggers the release workflow, which builds for
-macOS/Windows/Linux. Helpers:
+macOS (separate Apple Silicon `aarch64` and Intel `x64` downloads), Windows,
+and Linux. Helpers:
 
 ```bash
 bun run version:check          # verify the 4 files agree

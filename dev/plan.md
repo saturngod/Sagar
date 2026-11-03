@@ -2189,3 +2189,19 @@ and Antigravity custom-agent activation remain unverified. No frontend, UI,
 database schema or EPUB serialization changes; native UI and Windows/Linux
 execution were not tested. Next unfinished task: verify live translations with
 saved book instructions in rebuilt Sagar, including Antigravity activation.
+
+### Intel macOS release target — 2026-11-03
+
+Added an `x86_64-apple-darwin` build to the tag-triggered GitHub release
+matrix alongside Apple Silicon, Windows and Linux. macOS runners install both
+Rust targets; Intel builds reuse the existing signing/notarization settings and
+upload to the same draft release. README describes the separate downloads;
+the release checklist leaves Intel verification open. No milestone checkboxes
+advanced.
+
+Validation: release workflow YAML parsed successfully, the four-entry matrix
+includes Intel, and `git diff --check` passed. `actionlint` is not installed.
+No application code changed; frontend/Rust suites were not run. GitHub execution,
+Intel installer launch and native behavior remain unverified. Next unfinished
+task: run the next tagged release and smoke-test the Intel installer on an Intel
+Mac.
