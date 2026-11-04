@@ -54,6 +54,23 @@ pub fn books(conn: &Connection) -> Result<Vec<Book>, AppError> {
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
+/// Literal substring search over metadata using Unicode lowercase, preserving library order.
+/// This intentionally avoids SQLite's ASCII-only default case-insensitive matching.
+pub fn search_books(conn: &Connection, query: Option<&str>) -> Result<Vec<Book>, AppError> {
+    let query = query.unwrap_or_default().trim().to_lowercase();
+    let mut result = books(conn)?;
+    if !query.is_empty() {
+        result.retain(|book| {
+            book.title.to_lowercase().contains(&query)
+                || book
+                    .author
+                    .as_ref()
+                    .is_some_and(|author| author.to_lowercase().contains(&query))
+        });
+    }
+    Ok(result)
+}
+
 pub fn book(conn: &Connection, id: &str) -> Result<Book, AppError> {
     books(conn)?
         .into_iter()

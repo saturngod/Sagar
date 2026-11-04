@@ -1,8 +1,11 @@
 # Sagar Content Server REST API Guide
 
 API version: **v1**. This guide describes the implemented Sagar desktop server
-for the future Sagarwar client. The filename is `reset.md` as requested; this
-is a REST API guide. There is no reset/delete API.
+for the future Sagarwar client. There is no reset/delete API.
+
+Open the server base address in a browser to read this documentation. The root
+page is public and contains no library data, even when API authentication is
+enabled. API routes retain authentication and browser-origin restrictions.
 
 ## 1. Connection and scope
 
@@ -96,7 +99,7 @@ plain text. Always check the HTTP status before decoding the response.
 | PUT | `/api/v1/books/{bookId}/chapters/{chapterId}/translation` | Import into an empty chapter, or skip existing content |
 
 All successful requests below return **200 OK**, including a PUT that skips an
-existing translation. There is no pagination or server-side search in v1.
+existing translation. There is no pagination in v1. Book search is supported through the optional `q` query parameter.
 
 ## 4. GET `/api/v1` — server information
 
@@ -127,7 +130,21 @@ curl --fail-with-body -H 'Accept: application/json' \
 
 ## 5. GET `/api/v1/books` — library
 
-**Request:** no parameters or body.
+**Request:** optional `q` query parameter; no body. Omit `q` to list all books.
+Search matches a literal substring in either title or author, using Unicode
+lowercase comparison. Leading/trailing query whitespace is trimmed; an empty
+or whitespace-only query returns all books. `%` and `_` are literal characters,
+not wildcards. Accents and Unicode normalization are not folded. No chapter
+content is searched. Authentication applies as usual.
+
+```bash
+curl --fail-with-body --get -H 'Accept: application/json' \
+  --data-urlencode 'q=မြန်မာ' \
+  'http://192.168.1.20:8080/api/v1/books'
+```
+
+Search returns the same book array and ordering as the unfiltered endpoint;
+no matches returns `[]`. URL-encode query values (including spaces and `&`).
 
 ```bash
 curl --fail-with-body -H 'Accept: application/json' \

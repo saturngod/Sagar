@@ -3,10 +3,10 @@ use crate::{error::AppError, storage::content_server as repository};
 use axum::{
     Json, Router,
     body::Body,
-    extract::{DefaultBodyLimit, Path, Request, State},
+    extract::{DefaultBodyLimit, Path, Query, Request, State},
     http::{StatusCode, header},
     middleware::{self, Next},
-    response::{IntoResponse, Response},
+    response::{Html, IntoResponse, Response},
     routing::{get, put},
 };
 use base64::Engine;
@@ -193,7 +193,46 @@ fn router(api: Api) -> Router {
         .layer(DefaultBodyLimit::max(8*1024*1024))
         .layer(middleware::from_fn_with_state(api.clone(),guard))
         .with_state(api)
+        // Public documentation contains no library data; API guards remain unchanged.
+        .route("/", get(api_documentation))
 }
+async fn api_documentation() -> impl IntoResponse {
+    let mut content = String::new();
+    pulldown_cmark::html::push_html(
+        &mut content,
+        pulldown_cmark::Parser::new_ext(
+            include_str!("../../../docs/rest_api.md"),
+            pulldown_cmark::Options::ENABLE_TABLES,
+        ),
+    );
+    (
+        [
+            (header::CACHE_CONTROL, "no-store"),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+            (
+                header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+            ),
+        ],
+        Html(format!(
+            r#"<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sagar Content Server API</title><style>
+:root {{ color-scheme: light dark; }}
+body {{ margin: 0 auto; padding: 24px; max-width: 960px; font: 16px/1.65 system-ui, sans-serif; overflow-wrap: anywhere; }}
+h1, h2, h3 {{ line-height: 1.25; }}
+h2 {{ margin-top: 2em; }}
+pre {{ padding: 16px; border: 1px solid; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }}
+code {{ font-size: .9em; }}
+table {{ display: block; overflow-x: auto; border-collapse: collapse; }}
+th, td {{ padding: 8px 12px; border: 1px solid; text-align: left; }}
+a {{ color: light-dark(#1455a3, #8fc1ff); }}
+a:focus-visible {{ outline: 2px solid; outline-offset: 3px; }}
+</style></head><body><main>{content}</main></body></html>"#
+        )),
+    )
+}
+
 async fn guard(State(api): State<Api>, request: Request, next: Next) -> Response {
     // Native clients only: browser origins are rejected even without credentials.
     let permit = api.requests.clone().try_acquire_owned();
@@ -256,10 +295,19 @@ async fn blocking<T: Send + 'static>(
         .map_err(|_| ApiError(internal()))?
         .map_err(Into::into)
 }
-async fn books(State(api): State<Api>) -> Result<Json<Vec<repository::Book>>, ApiError> {
-    blocking(move || repository::books(&super::workspace::open_db(&api.dir)?))
-        .await
-        .map(Json)
+#[derive(Default, Deserialize)]
+struct BookQuery {
+    q: Option<String>,
+}
+async fn books(
+    State(api): State<Api>,
+    Query(query): Query<BookQuery>,
+) -> Result<Json<Vec<repository::Book>>, ApiError> {
+    blocking(move || {
+        repository::search_books(&super::workspace::open_db(&api.dir)?, query.q.as_deref())
+    })
+    .await
+    .map(Json)
 }
 async fn chapters(
     State(api): State<Api>,
@@ -393,6 +441,131 @@ mod tests {
     }
     fn payload() -> serde_json::Value {
         serde_json::json!({"sourceSha256":"a".repeat(64),"targetLanguage":"my","href":"Text/c.xhtml","html":"<p>မြန်မာစာ <em>စာ</em></p>","expectedRevision":0})
+    }
+    #[test]
+    fn root_serves_public_documentation_but_browser_api_access_stays_blocked() {
+        let dir = fixture();
+        let server = ContentServer::default();
+        let client = reqwest::blocking::Client::new();
+        for (username, password) in [("", ""), ("user", "pass")] {
+            let status = server
+                .start(
+                    dir.path().into(),
+                    Config {
+                        username: username.into(),
+                        password: password.into(),
+                        ..Config::default()
+                    },
+                )
+                .unwrap();
+            let base = format!("http://127.0.0.1:{}", status.port.unwrap());
+            let response = client
+                .get(&base)
+                .header("Sec-Fetch-Site", "none")
+                .send()
+                .unwrap();
+            assert_eq!(response.status(), 200);
+            assert_eq!(
+                response.headers()[header::CONTENT_TYPE],
+                "text/html; charset=utf-8"
+            );
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+            assert!(
+                response.headers()[header::CONTENT_SECURITY_POLICY]
+                    .to_str()
+                    .unwrap()
+                    .contains("default-src 'none'")
+            );
+            let html = response.text().unwrap();
+            assert!(html.contains("<h1>Sagar Content Server REST API Guide</h1>"));
+            assert!(html.contains("<table>"));
+            assert!(html.contains("expectedRevision"));
+            assert!(html.contains("/api/v1/books"));
+            assert_eq!(
+                client
+                    .get(format!("{base}/api/v1/books"))
+                    .header("Sec-Fetch-Site", "same-origin")
+                    .basic_auth("user", Some("pass"))
+                    .send()
+                    .unwrap()
+                    .status(),
+                403
+            );
+            assert_eq!(
+                client
+                    .get(format!("{base}/missing"))
+                    .basic_auth("user", Some("pass"))
+                    .send()
+                    .unwrap()
+                    .status(),
+                404
+            );
+            server.stop().unwrap();
+        }
+    }
+
+    #[test]
+    fn book_search_matches_metadata_and_preserves_library_contract() {
+        let dir = fixture();
+        let conn = super::super::workspace::open_db(dir.path()).unwrap();
+        conn.execute("INSERT INTO projects(id,source_sha256,source_snapshot_path,title,author,created_at,updated_at) VALUES('other','other','projects/other/source.epub','မြန်မာစာ 100%_ ÉCOLE',NULL,'now','zzz')", []).unwrap();
+        drop(conn);
+        let server = ContentServer::default();
+        let status = server
+            .start(
+                dir.path().into(),
+                Config {
+                    username: "user".into(),
+                    password: "pass".into(),
+                    ..Config::default()
+                },
+            )
+            .unwrap();
+        let url = format!("http://127.0.0.1:{}/api/v1/books", status.port.unwrap());
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .unwrap();
+        assert_eq!(
+            client.get(format!("{url}?q=book")).send().unwrap().status(),
+            401
+        );
+        for (query, expected) in [
+            (None, vec!["other", "book"]),
+            (Some("  "), vec!["other", "book"]),
+            (Some(" bOoK a "), vec!["book"]),
+            (Some("xxx"), vec!["book"]),
+            (Some("မြန်မာ"), vec!["other"]),
+            (Some("école"), vec!["other"]),
+            (Some("%_"), vec!["other"]),
+            (Some("absent"), vec![]),
+            (Some("' OR 1=1 --"), vec![]),
+        ] {
+            let mut search_url = reqwest::Url::parse(&url).unwrap();
+            if let Some(q) = query {
+                search_url.query_pairs_mut().append_pair("q", q);
+            }
+            let response = client
+                .get(search_url)
+                .basic_auth("user", Some("pass"))
+                .send()
+                .unwrap();
+            assert_eq!(response.status(), 200);
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+            let books: Vec<serde_json::Value> = response.json().unwrap();
+            assert_eq!(
+                books
+                    .iter()
+                    .map(|b| b["id"].as_str().unwrap())
+                    .collect::<Vec<_>>(),
+                expected,
+                "query: {query:?}"
+            );
+            for book in books {
+                assert!(book["coverUrl"].is_string());
+            }
+        }
+        server.stop().unwrap();
     }
     #[test]
     fn http_auth_download_fill_only_and_lifecycle() {

@@ -19,6 +19,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 axum = "0.8"
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 local-ip-address = "0.6"
 tokio-util = { version = "0.7", features = ["io"] }
 fontdb = "0.24"

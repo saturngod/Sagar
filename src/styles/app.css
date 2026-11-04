@@ -3411,16 +3411,85 @@ button {
   display: grid;
   gap: var(--space-3);
 }
+.content-server-settings p {
+  margin: 0;
+}
+.content-server-settings__state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.content-server-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.content-server-badge__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.content-server-badge--running {
+  border-color: var(--color-success-border);
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+.content-server-badge--busy {
+  border-color: var(--color-info-border);
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+.content-server-settings__field-label {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.content-server-settings__field-label small {
+  font-size: var(--text-xs);
+}
+.content-server-settings__label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
 .content-server-settings__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
   margin-top: var(--space-3);
 }
+.content-server-settings__actions .btn {
+  line-height: 1;
+}
+.content-server-settings__actions .btn > .icon {
+  display: block;
+}
+.content-server-settings__actions .btn > span {
+  /* Trim the label to its cap height so the letters center on the icon. */
+  text-box: trim-both cap alphabetic;
+  white-space: nowrap;
+}
 .content-server-settings__connection {
-  border-top: var(--border-subtle);
-  padding-top: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
   overflow-wrap: anywhere;
+}
+.content-server-settings__connection ul {
+  margin: 0;
+  padding-inline-start: var(--space-4);
 }
 .content-server-settings__connection code {
   user-select: all;

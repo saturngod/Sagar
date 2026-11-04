@@ -108,19 +108,54 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
   }
 
   const locked = busy || status === null || status.running;
+  const state = busy ? "busy" : status === null ? "unknown" : status.running ? "running" : "stopped";
+  const stateLabel = busy
+    ? action === "start"
+      ? "Starting…"
+      : action === "stop"
+        ? "Stopping…"
+        : "Checking…"
+    : status === null
+      ? "Unknown"
+      : status.running
+        ? "Running"
+        : "Stopped";
+  const clearValidation = () => {
+    setValidation(null);
+    setInvalidField(null);
+  };
   return (
     <section
       className="provider-section content-server-settings"
       aria-labelledby="content-server-heading"
       aria-busy={busy}
     >
-      <h3 className="panel__heading" id="content-server-heading">
-        {t("Content server")}
-      </h3>
+      <div className="provider-section__header">
+        <h3 className="panel__heading" id="content-server-heading">
+          {t("Content server")}
+        </h3>
+        <div className="content-server-settings__state">
+          <span
+            className={`content-server-badge content-server-badge--${state}`}
+            role="status"
+          >
+            <span className="content-server-badge__dot" aria-hidden="true" />
+            {t(stateLabel)}
+          </span>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={t("Check status")}
+            title={t("Check status")}
+            disabled={busy}
+            onClick={() => void run("refresh", contentServerStatus)}
+          >
+            <Icon name="refresh" spin={busy && action === "refresh"} />
+          </button>
+        </div>
+      </div>
       <p className="dialog__muted">
-        {t(
-          "Share your Sagar library, covers and saved translations with Sagarwar on the same network. Existing translations are never replaced.",
-        )}
+        {t("Share your library and saved translations with Sagarwar on the same network.")}
       </p>
       {error ? (
         <StatusNotice
@@ -131,34 +166,9 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
           {error}
         </StatusNotice>
       ) : null}
-      {busy ? (
-        <StatusNotice kind="loading">
-          {t(
-            action === "start"
-              ? "Starting content server…"
-              : action === "stop"
-                ? "Stopping content server…"
-                : "Checking content server…",
-          )}
-        </StatusNotice>
-      ) : null}
-      {status && !busy ? (
-        <StatusNotice kind={status.running ? "success" : "info"}>
-          {t(
-            status.running ? "Content server is running." : "Content server is stopped.",
-          )}
-        </StatusNotice>
-      ) : null}
       {status?.running ? (
         <div className="content-server-settings__connection">
-          <p>
-            {t(status.authenticationRequired ? "Login required." : "No login required.")}
-          </p>
-          <p>
-            {t(
-              "In Sagarwar, connect using an address below. Both devices must be on the same network; firewall settings may need to allow Sagar.",
-            )}
-          </p>
+          <p className="content-server-settings__label">{t("Connect from Sagarwar")}</p>
           {status.urls.length > 0 ? (
             <ul>
               {status.urls.map((url) => (
@@ -169,14 +179,16 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
             </ul>
           ) : (
             <p>
-              {t(
-                "No local-network address was found. Use this computer’s IPv4 address with port",
-              )}{" "}
+              {t("No network address found. Use this computer’s IP address with port")}{" "}
               <strong>{status.port}</strong>.
             </p>
           )}
           <p className="dialog__muted">
-            {t("On this computer only:")} <code>http://127.0.0.1:{status.port}</code>
+            {t("This computer:")} <code>http://127.0.0.1:{status.port}</code>
+          </p>
+          <p className="dialog__muted">
+            {t(status.authenticationRequired ? "Login required." : "No login required.")}{" "}
+            {t("If Sagarwar can’t connect, allow Sagar through the firewall.")}
           </p>
         </div>
       ) : null}
@@ -188,7 +200,12 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
       >
         <div hidden={status?.running}>
           <label className="form-field settings-row" htmlFor="content-server-port">
-            <span className="settings-label">{t("Port")}</span>
+            <span className="settings-label content-server-settings__field-label">
+              <span>{t("Port")}</span>
+              <small className="dialog__muted" id="content-server-port-help">
+                {t("0 picks a free port")}
+              </small>
+            </span>
             <input
               id="content-server-port"
               inputMode="numeric"
@@ -202,23 +219,19 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
               }
               onChange={(event) => {
                 setPort(event.target.value);
-                setValidation(null);
-                setInvalidField(null);
+                clearValidation();
               }}
             />
           </label>
-          <p className="dialog__muted" id="content-server-port-help">
-            {t(
-              "Use 0 to choose an available port. Stop the server before changing its settings.",
-            )}
-          </p>
           <label className="form-field settings-row" htmlFor="content-server-username">
             <span className="settings-label">{t("Username (optional)")}</span>
             <input
               id="content-server-username"
               aria-invalid={invalidField === "credentials"}
               aria-describedby={
-                invalidField === "credentials" ? "content-server-validation" : undefined
+                invalidField === "credentials"
+                  ? "content-server-login-help content-server-validation"
+                  : "content-server-login-help"
               }
               autoComplete="off"
               maxLength={256}
@@ -226,8 +239,7 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
               disabled={locked}
               onChange={(event) => {
                 setUsername(event.target.value);
-                setValidation(null);
-                setInvalidField(null);
+                clearValidation();
               }}
             />
           </label>
@@ -238,7 +250,9 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
               type="password"
               aria-invalid={invalidField === "credentials"}
               aria-describedby={
-                invalidField === "credentials" ? "content-server-validation" : undefined
+                invalidField === "credentials"
+                  ? "content-server-login-help content-server-validation"
+                  : "content-server-login-help"
               }
               autoComplete="new-password"
               maxLength={1024}
@@ -246,14 +260,13 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
               disabled={locked}
               onChange={(event) => {
                 setPassword(event.target.value);
-                setValidation(null);
-                setInvalidField(null);
+                clearValidation();
               }}
             />
           </label>
-          <p className="dialog__muted">
+          <p className="dialog__muted" id="content-server-login-help">
             {t(
-              "Leave both empty for access without a login. Anyone who can reach this server can then download books and fill missing translations. Use a trusted local network: HTTP does not encrypt passwords or book content.",
+              "Without a login, anyone on this network can access your books. Connections aren’t encrypted, so use a trusted network.",
             )}
           </p>
         </div>
@@ -277,7 +290,7 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
               }}
             >
               <Icon name="stop" />
-              {t(busy && action === "stop" ? "Stopping…" : "Stop server")}
+              <span>{t(busy && action === "stop" ? "Stopping…" : "Stop server")}</span>
             </button>
           ) : (
             <button
@@ -287,31 +300,17 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
               disabled={locked}
             >
               <Icon name="play" />
-              {t(busy && action === "start" ? "Starting…" : "Start server")}
+              <span>{t(busy && action === "start" ? "Starting…" : "Start server")}</span>
             </button>
           )}
-          <button
-            type="button"
-            className="btn"
-            disabled={busy}
-            onClick={() => void run("refresh", contentServerStatus)}
-          >
-            <Icon name="refresh" />
-            {t("Check status")}
-          </button>
-        </div>
-        {status?.running ? (
           <p className="dialog__muted">
             {t(
-              "Stop the server to change its settings. HTTP does not encrypt passwords or book content; use a trusted local network.",
+              status?.running
+                ? "Stop the server to change settings."
+                : "Runs until Sagar quits. Login isn’t saved.",
             )}
           </p>
-        ) : null}
-        <p className="dialog__muted">
-          {t(
-            "The server stays on when you close Settings and stops when Sagar quits. Credentials are not saved for the next launch.",
-          )}
-        </p>
+        </div>
       </form>
     </section>
   );

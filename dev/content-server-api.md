@@ -1,7 +1,7 @@
 # Sagar content server API v1
 
 For endpoint request/response schemas, curl examples and client integration, see
-the [detailed REST API guide](../docs/reset.md).
+the [detailed REST API guide](../docs/rest_api.md).
 
 Content API and Sagar settings controls for a future Sagarwar client. In the
 library, open Settings → Content server to Start/Stop and check connection
@@ -50,6 +50,12 @@ credentials are configured. Missing/wrong credentials return 401 with
 | GET | `/api/v1/books/{bookId}/chapters` | Spine-ordered chapter array, including saved HTML |
 | GET | `/api/v1/books/{bookId}/chapters/translated` | `{chapterIds: [...]}` for saved translation HTML, in spine order |
 | PUT | `/api/v1/books/{bookId}/chapters/{chapterId}/translation` | Fill an empty chapter or skip existing content |
+
+`GET /api/v1/books?q=...` searches title or author by literal substring using
+Unicode lowercase comparison, preserving library order and response fields.
+URL-encode `q`; omitted/blank queries list all books, and no matches returns `[]`.
+Query whitespace is trimmed; `%`/`_` are literal, and accents/Unicode normalization
+are not folded. Chapter content is not searched. Authentication is unchanged.
 
 Each book includes an origin-relative `coverUrl`, for example
 `/api/v1/books/<bookId>/cover`. Resolve it against the server origin and send

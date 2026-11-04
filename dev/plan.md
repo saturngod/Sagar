@@ -1,5 +1,52 @@
 # Plan.md — EPUB Translation Studio
 
+### Content server root API documentation — 2026-11-04
+
+The server base URL now serves the embedded `docs/rest_api.md` as HTML with
+headings, tables, code examples, responsive spacing and system light/dark colors.
+The documentation is public and contains no library data; authenticated API
+routes keep their existing browser-header rejection and credentials checks.
+A restrictive CSP disables scripts and remote resources. Added pulldown-cmark
+for Markdown rendering and corrected the API overview link after the guide rename.
+This is content-server follow-up work; no milestone checkboxes advanced.
+
+Validation: all six content-server loopback tests passed, including browser-style
+root navigation with and without credentials, rendered guide content/headers,
+API browser rejection and authenticated unknown-route behavior. Rust formatting
+and `git diff --check` passed. Frontend and full Rust suites were not repeated.
+Rendered browser/native appearance, keyboard interaction, minimum-size layout,
+and Windows/Linux networking remain unverified. Next unfinished task: verify
+the documentation in a rebuilt native server, then Sagarwar client integration.
+
+
+### Content server action alignment — 2026-11-04
+
+Wrapped Start/Stop server and Check status labels in explicit elements and
+normalized their line height, with text-box trimming where supported, so label
+font leading does not offset the icons. Scoped to server actions; no behavior
+or milestone checkbox changes. `bun run check` passed (existing bundle-size
+warning). Native visual, minimum-window, light/dark and cross-platform checks
+remain unverified. Next unfinished task: verify alignment in the native app,
+including Myanmar labels and pending/disabled controls.
+
+### Content server book search — 2026-11-04
+
+Added optional `q` to GET `/api/v1/books` for literal title/author substring
+search using Unicode lowercase comparison, including Myanmar text. Omitted or
+trimmed-empty queries retain the full library; no matches returns `[]`.
+Existing metadata fields, ordering, authentication and no-store headers remain
+unchanged. Search runs in the Rust repository layer on metadata only; no schema,
+EPUB or UI changes. Updated both API guides. No milestone checkboxes advanced.
+
+Validation: all five content-server loopback tests passed, including search by
+title/author, mixed case, Myanmar/accented text, null author, blank/no-match
+queries, literal wildcard/SQL-like input, authentication and ordering. Rust
+formatting and `git diff --check` passed. Frontend/full Rust suites were not
+repeated for this scoped backend change. Native Sagarwar and Windows/Linux
+network integration remain unverified. Search scans library metadata in memory;
+pagination/indexing remain future work. Next unfinished task: consume search in
+the Sagarwar connection/book list client and verify against rebuilt native Sagar.
+
 ### Content server settings controls — 2026-11-03
 
 Added Library → Settings → Content server with Start/Stop/Check status, port
