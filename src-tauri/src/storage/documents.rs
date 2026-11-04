@@ -21,22 +21,7 @@ pub fn load(conn: &Connection, chapter_id: &str) -> Result<ChapterDocument, AppE
     if let Some(document) = existing {
         return Ok(document);
     }
-    // Bring forward saved translations only; never seed a new editor with source text.
-    let mut stmt = conn.prepare("SELECT b.element_name,t.target_xhtml_fragment FROM blocks b JOIN translations t ON t.block_id=b.id WHERE b.chapter_id=?1 AND t.target_xhtml_fragment IS NOT NULL ORDER BY b.block_index")?;
-    let rows = stmt.query_map([chapter_id], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-    })?;
-    let mut html = String::new();
-    for row in rows {
-        let (tag, fragment) = row?;
-        let tag = if matches!(tag.as_str(), "h1" | "h2" | "h3" | "h4" | "h5" | "h6") {
-            tag.as_str()
-        } else {
-            "p"
-        };
-        html.push_str(&format!("<{tag}>{fragment}</{tag}>"));
-    }
-    let html = if html.is_empty() { None } else { Some(html) };
+    let html = legacy_html(conn, chapter_id)?;
     let status = if html.is_some() { "draft" } else { "pending" };
     crate::storage::with_busy_retry(|| {
         conn.execute(
@@ -58,6 +43,43 @@ pub fn load(conn: &Connection, chapter_id: &str) -> Result<ChapterDocument, AppE
         },
     )
     .map_err(Into::into)
+}
+
+/// Read-only view of a chapter's saved translation using the same precedence
+/// as [`load`], without materializing a document row for legacy drafts.
+pub fn peek(conn: &Connection, chapter_id: &str) -> Result<(Option<String>, String), AppError> {
+    let existing = conn
+        .query_row(
+            "SELECT html,status FROM chapter_documents WHERE chapter_id=?1",
+            [chapter_id],
+            |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, String>(1)?)),
+        )
+        .optional()?;
+    if let Some(found) = existing {
+        return Ok(found);
+    }
+    let html = legacy_html(conn, chapter_id)?;
+    let status = if html.is_some() { "draft" } else { "pending" };
+    Ok((html, status.to_string()))
+}
+
+/// Brings forward saved block translations only; never seeds with source text.
+fn legacy_html(conn: &Connection, chapter_id: &str) -> Result<Option<String>, AppError> {
+    let mut stmt = conn.prepare("SELECT b.element_name,t.target_xhtml_fragment FROM blocks b JOIN translations t ON t.block_id=b.id WHERE b.chapter_id=?1 AND t.target_xhtml_fragment IS NOT NULL ORDER BY b.block_index")?;
+    let rows = stmt.query_map([chapter_id], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })?;
+    let mut html = String::new();
+    for row in rows {
+        let (tag, fragment) = row?;
+        let tag = if matches!(tag.as_str(), "h1" | "h2" | "h3" | "h4" | "h5" | "h6") {
+            tag.as_str()
+        } else {
+            "p"
+        };
+        html.push_str(&format!("<{tag}>{fragment}</{tag}>"));
+    }
+    Ok(if html.is_empty() { None } else { Some(html) })
 }
 
 pub fn authored(conn: &Connection, chapter_id: &str) -> Result<Option<ChapterDocument>, AppError> {

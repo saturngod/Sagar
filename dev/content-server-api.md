@@ -35,6 +35,17 @@ Requests are limited to eight concurrent handlers with a 30-second handler/body
 read deadline (EPUB response bodies stream separately). Slow/overloaded requests
 return 408/503. All responses use `Cache-Control: no-store`. No request/content logging is added.
 
+## Web reader and docs
+
+`GET /` serves a read-only single-page reader (book list, search, chapter
+original/translation views). `GET /docs` serves the public API guide. Reader
+data routes (`/reader/api/books`, `/books/{id}`, `/books/{id}/cover`,
+`/books/{id}/chapters/{chapterId}`, `/books/{id}/resources/{path}`) are GET-only,
+same-origin, use the server's Basic credentials, allow only IP/localhost/local
+host names, sanitize HTML with the preview allowlist, and serve images only.
+They read translations without materializing chapter document rows.
+Implementation: `src-tauri/src/services/web_reader.rs` and `web_reader/` assets.
+
 ## Remote endpoints
 
 Every endpoint requires `Authorization: Basic <base64(username:password)>` when

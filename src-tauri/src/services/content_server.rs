@@ -17,6 +17,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[path = "web_reader.rs"]
+mod web_reader;
+
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Config {
@@ -52,6 +55,7 @@ struct Api {
     dir: PathBuf,
     authorization: Option<Arc<String>>,
     requests: Arc<tokio::sync::Semaphore>,
+    web_requests: Arc<tokio::sync::Semaphore>,
 }
 
 impl ContentServer {
@@ -114,6 +118,7 @@ impl ContentServer {
             dir,
             authorization,
             requests: Arc::new(tokio::sync::Semaphore::new(8)),
+            web_requests: Arc::new(tokio::sync::Semaphore::new(8)),
         });
         // Enter the Tauri runtime before constructing Tokio's listener.
         let task = tauri::async_runtime::spawn(async move {
@@ -192,9 +197,28 @@ fn router(api: Api) -> Router {
         .route("/api/v1/books/{book}/chapters/{chapter}/translation",put(import))
         .layer(DefaultBodyLimit::max(8*1024*1024))
         .layer(middleware::from_fn_with_state(api.clone(),guard))
-        .with_state(api)
+        .with_state(api.clone())
+        // Read-only browser reader at `/`, with its own same-origin guard.
+        .merge(web_reader::routes(api))
         // Public documentation contains no library data; API guards remain unchanged.
-        .route("/", get(api_documentation))
+        .route("/docs", get(api_documentation))
+}
+fn authorized(api: &Api, headers: &header::HeaderMap) -> bool {
+    api.authorization.as_ref().is_none_or(|expected| {
+        headers.get(header::AUTHORIZATION).map(|h| h.as_bytes()) == Some(expected.as_bytes())
+    })
+}
+fn unauthorized() -> Response {
+    let mut r = (
+        StatusCode::UNAUTHORIZED,
+        Json(serde_json::json!({"code":"unauthorized"})),
+    )
+        .into_response();
+    r.headers_mut().insert(
+        header::WWW_AUTHENTICATE,
+        header::HeaderValue::from_static("Basic realm=\"Sagar\", charset=\"UTF-8\""),
+    );
+    r
 }
 async fn api_documentation() -> impl IntoResponse {
     let mut content = String::new();
@@ -250,23 +274,8 @@ async fn guard(State(api): State<Api>, request: Request, next: Next) -> Response
             Json(serde_json::json!({"code":"browser_not_allowed"})),
         )
             .into_response()
-    } else if api.authorization.as_ref().is_some_and(|expected| {
-        request
-            .headers()
-            .get(header::AUTHORIZATION)
-            .map(|h| h.as_bytes())
-            != Some(expected.as_bytes())
-    }) {
-        let mut r = (
-            StatusCode::UNAUTHORIZED,
-            Json(serde_json::json!({"code":"unauthorized"})),
-        )
-            .into_response();
-        r.headers_mut().insert(
-            header::WWW_AUTHENTICATE,
-            header::HeaderValue::from_static("Basic realm=\"Sagar\", charset=\"UTF-8\""),
-        );
-        r
+    } else if !authorized(&api, request.headers()) {
+        unauthorized()
     } else {
         match tokio::time::timeout(std::time::Duration::from_secs(30), next.run(request)).await {
             Ok(response) => response,
@@ -443,7 +452,7 @@ mod tests {
         serde_json::json!({"sourceSha256":"a".repeat(64),"targetLanguage":"my","href":"Text/c.xhtml","html":"<p>မြန်မာစာ <em>စာ</em></p>","expectedRevision":0})
     }
     #[test]
-    fn root_serves_public_documentation_but_browser_api_access_stays_blocked() {
+    fn root_serves_reader_docs_stay_public_and_browser_api_access_stays_blocked() {
         let dir = fixture();
         let server = ContentServer::default();
         let client = reqwest::blocking::Client::new();
@@ -460,7 +469,7 @@ mod tests {
                 .unwrap();
             let base = format!("http://127.0.0.1:{}", status.port.unwrap());
             let response = client
-                .get(&base)
+                .get(format!("{base}/docs"))
                 .header("Sec-Fetch-Site", "none")
                 .send()
                 .unwrap();
@@ -481,6 +490,30 @@ mod tests {
             assert!(html.contains("<table>"));
             assert!(html.contains("expectedRevision"));
             assert!(html.contains("/api/v1/books"));
+            // The reader shell follows the server's login.
+            let root = client
+                .get(&base)
+                .header("Sec-Fetch-Site", "none")
+                .send()
+                .unwrap();
+            if username.is_empty() {
+                assert_eq!(root.status(), 200);
+                let csp = root.headers()[header::CONTENT_SECURITY_POLICY]
+                    .to_str()
+                    .unwrap()
+                    .to_string();
+                assert!(csp.contains("script-src 'self'") && !csp.contains("unsafe"));
+                assert!(root.text().unwrap().contains("/assets/reader.js"));
+            } else {
+                assert_eq!(root.status(), 401);
+                assert!(root.headers().contains_key(header::WWW_AUTHENTICATE));
+                let root = client
+                    .get(&base)
+                    .basic_auth("user", Some("pass"))
+                    .send()
+                    .unwrap();
+                assert_eq!(root.status(), 200);
+            }
             assert_eq!(
                 client
                     .get(format!("{base}/api/v1/books"))
@@ -502,6 +535,185 @@ mod tests {
             );
             server.stop().unwrap();
         }
+    }
+
+    #[test]
+    fn web_reader_is_read_only_sanitized_and_same_origin() {
+        use std::io::Write;
+        let dir = fixture();
+        let png = base64::engine::general_purpose::STANDARD.decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jvJkAAAAASUVORK5CYII=").unwrap();
+        let chapter = r#"<html xmlns="http://www.w3.org/1999/xhtml"><head><title>C</title><script>alert(1)</script></head><body><h1 id="top" onclick="alert(1)">Chapter One</h1><p>See <a href="c.xhtml#note">note</a> and <a href="https://example.com/x">web</a>.</p><img src="img/a.png" alt="A"/><script>alert(2)</script><p id="note">Note text</p></body></html>"#;
+        {
+            let mut zip = zip::ZipWriter::new(
+                std::fs::File::create(dir.path().join("projects/book/source.epub")).unwrap(),
+            );
+            for (name, bytes) in [
+                ("mimetype", b"application/epub+zip".as_slice()),
+                ("Text/c.xhtml", chapter.as_bytes()),
+                ("Text/img/a.png", png.as_slice()),
+                ("Text/style.css", b"body{}".as_slice()),
+            ] {
+                zip.start_file(name, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                zip.write_all(bytes).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        let mut conn = super::super::workspace::open_db(dir.path()).unwrap();
+        conn.execute("INSERT INTO chapters(id,project_id,spine_index,manifest_item_id,resource_href,title) VALUES('legacy','book',1,'l','Text/c.xhtml','Legacy')",[]).unwrap();
+        conn.execute("INSERT INTO blocks(id,chapter_id,block_index,structural_locator,element_name,source_xhtml_fragment,source_plain_text) VALUES('lb','legacy',0,'0','p','Source','Source')",[]).unwrap();
+        conn.execute("INSERT INTO translations(block_id,target_xhtml_fragment,target_plain_text,status) VALUES('lb','ဘာသာ','ဘာသာ','draft')",[]).unwrap();
+        documents::save(&mut conn, "chapter", Some("<p>x</p>".into()), "draft", 0).unwrap();
+        // Bypass save validation to prove the reader sanitizes stored HTML itself.
+        conn.execute("UPDATE chapter_documents SET html='<h1>အခန်း</h1><p onclick=\"x()\">မြန်မာ <em>စာ</em></p>' WHERE chapter_id='chapter'",[]).unwrap();
+        let rows = |conn: &rusqlite::Connection| -> i64 {
+            conn.query_row("SELECT COUNT(*) FROM chapter_documents", [], |r| r.get(0))
+                .unwrap()
+        };
+        let before = rows(&conn);
+        let server = ContentServer::default();
+        let status = server
+            .start(
+                dir.path().into(),
+                Config {
+                    username: "user".into(),
+                    password: "pass".into(),
+                    ..Config::default()
+                },
+            )
+            .unwrap();
+        let port = status.port.unwrap();
+        let base = format!("http://127.0.0.1:{port}/reader/api");
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .unwrap();
+        let get = |path: &str| {
+            client
+                .get(format!("{base}{path}"))
+                .basic_auth("user", Some("pass"))
+                .header("Sec-Fetch-Site", "same-origin")
+        };
+        assert_eq!(
+            client.get(format!("{base}/books")).send().unwrap().status(),
+            401
+        );
+        let books: serde_json::Value = get("/books?q=book").send().unwrap().json().unwrap();
+        assert_eq!(books[0]["id"], "book");
+        assert_eq!(books[0]["chapterCount"], 2);
+        assert_eq!(books[0]["translatedCount"], 2);
+        assert_eq!(books[0]["coverUrl"], "/reader/api/books/book/cover");
+        assert!(books[0].get("sourceSha256").is_none());
+        assert_eq!(
+            get("/books?q=absent")
+                .send()
+                .unwrap()
+                .json::<serde_json::Value>()
+                .unwrap(),
+            serde_json::json!([])
+        );
+        let detail: serde_json::Value = get("/books/book").send().unwrap().json().unwrap();
+        assert_eq!(detail["chapters"][0]["id"], "chapter");
+        assert_eq!(detail["chapters"][0]["href"], "Text/c.xhtml");
+        assert_eq!(detail["chapters"][1]["translated"], true);
+        let response = get("/books/book/chapters/chapter").send().unwrap();
+        assert_eq!(response.status(), 200);
+        assert!(
+            response.headers()[header::CONTENT_SECURITY_POLICY]
+                .to_str()
+                .unwrap()
+                .contains("script-src 'self'")
+        );
+        let view: serde_json::Value = response.json().unwrap();
+        let original = view["originalHtml"].as_str().unwrap();
+        assert!(original.contains("Chapter One") && original.contains("Note text"));
+        assert!(!original.contains("script") && !original.contains("onclick"));
+        assert!(!original.contains("example.com"));
+        assert!(original.contains("/reader/api/books/book/resources/Text/img/a.png"));
+        assert!(original.contains("/reader/api/books/book/resources/Text/c.xhtml#note"));
+        let translated = view["translatedHtml"].as_str().unwrap();
+        assert!(translated.contains("<em>စာ</em>") && !translated.contains("onclick"));
+        assert_eq!(view["status"], "draft");
+        let legacy: serde_json::Value = get("/books/book/chapters/legacy")
+            .send()
+            .unwrap()
+            .json()
+            .unwrap();
+        assert!(legacy["translatedHtml"].as_str().unwrap().contains("ဘာသာ"));
+        let image = get("/books/book/resources/Text/img/a.png").send().unwrap();
+        assert_eq!(image.status(), 200);
+        assert_eq!(image.headers()[header::CONTENT_TYPE], "image/png");
+        assert!(
+            image.headers()[header::CONTENT_SECURITY_POLICY]
+                .to_str()
+                .unwrap()
+                .starts_with("sandbox")
+        );
+        for path in [
+            "/books/book/resources/Text/style.css",
+            "/books/book/resources/Text/c.xhtml",
+            "/books/book/resources/../../secret",
+            "/books/missing/chapters/chapter",
+            "/books/book/chapters/missing",
+        ] {
+            assert_eq!(get(path).send().unwrap().status(), 404, "{path}");
+        }
+        assert_eq!(
+            client
+                .put(format!("{base}/books/book/chapters/chapter"))
+                .basic_auth("user", Some("pass"))
+                .body("{}")
+                .send()
+                .unwrap()
+                .status(),
+            405
+        );
+        assert_eq!(
+            get("/books")
+                .header("Sec-Fetch-Site", "cross-site")
+                .send()
+                .unwrap()
+                .status(),
+            403
+        );
+        assert_eq!(
+            get("/books")
+                .header("Origin", "http://evil.invalid")
+                .send()
+                .unwrap()
+                .status(),
+            403
+        );
+        assert_eq!(
+            get("/books")
+                .header("Origin", format!("http://127.0.0.1:{port}"))
+                .send()
+                .unwrap()
+                .status(),
+            200
+        );
+        assert_eq!(
+            get("/books")
+                .header(header::HOST, format!("rebind.example.com:{port}"))
+                .send()
+                .unwrap()
+                .status(),
+            403
+        );
+        for asset in ["/assets/reader.js", "/assets/reader.css"] {
+            let response = client
+                .get(format!("http://127.0.0.1:{port}{asset}"))
+                .basic_auth("user", Some("pass"))
+                .send()
+                .unwrap();
+            assert_eq!(response.status(), 200, "{asset}");
+        }
+        server.stop().unwrap();
+        assert_eq!(
+            rows(&conn),
+            before,
+            "reader must not write chapter documents"
+        );
     }
 
     #[test]

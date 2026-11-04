@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Sagar content server REST API guide: share books, covers and chapter translations with native clients on your local network.">
+  <meta name="theme-color" content="#f6f5f0">
+  <title>Sagar — Content Server REST API</title>
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  <style>
+    :root{color-scheme:light;--paper:#f6f5f0;--ink:#1c2430;--muted:#59636d;--blue:#2b6cb0;--line:#d5dae1;--white:#fff;--code:#1c2430;--code-ink:#e6ebf1;--chip:#e8eef5;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--paper)}
+    *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}a:focus-visible{outline:3px solid var(--blue);outline-offset:4px}
+    p,li{line-height:1.75}h1,h2,h3,p{margin-top:0}h1,h2{font-family:Charter,Georgia,serif;font-weight:400;letter-spacing:-.04em}h1{font-size:clamp(40px,6vw,68px);line-height:1.06;margin-bottom:20px}h2{font-size:clamp(28px,3.4vw,38px);line-height:1.15;margin:0 0 18px;padding-top:56px;border-top:1px solid var(--line)}h3{font-size:19px;letter-spacing:-.02em;margin:34px 0 12px}
+    .container{width:min(1160px,calc(100% - 48px));margin:auto}
+    .header{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:22px 0;border-bottom:1px solid var(--line)}.header a{color:inherit}.brand{display:flex;align-items:center;gap:10px;font-size:23px;font-weight:750;letter-spacing:-1px}.brand img{width:46px;height:46px;object-fit:contain}.nav{display:flex;align-items:center;gap:28px;font-size:14px;font-weight:600}.nav .repo{border:1px solid var(--line);border-radius:6px;padding:10px 16px}.nav [aria-current]{color:var(--blue)}
+    .eyebrow{font-size:12px;font-weight:750;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);margin-bottom:18px}
+    .hero{padding:64px 0 40px;max-width:760px}.hero .intro{font-size:18px;color:var(--muted)}
+    .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}.meta span{font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--white);border-radius:999px;padding:6px 14px}
+    .layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:56px;align-items:start;padding-bottom:80px}
+    .toc{position:sticky;top:24px;font-size:14px;max-height:calc(100vh - 48px);overflow:auto;padding-right:8px}.toc p{font-size:12px;font-weight:750;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}.toc ol{list-style:none;margin:0;padding:0;border-left:1px solid var(--line)}.toc a{display:block;padding:6px 0 6px 16px;color:var(--muted);line-height:1.4}.toc a:hover{color:var(--ink);text-decoration:none}
+    main,article{min-width:0}article{max-width:820px}article>section:first-child h2{border-top:0;padding-top:0}article p,article li{color:#333d48;font-size:16px}article ul,article ol{padding-left:22px}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:var(--chip);border-radius:4px;padding:2px 6px;overflow-wrap:anywhere}
+    pre{background:var(--code);color:var(--code-ink);border-radius:8px;padding:18px 20px;overflow:auto;font-size:13.5px;line-height:1.65;margin:0 0 22px}pre code{background:none;padding:0;color:inherit;font-size:inherit;overflow-wrap:normal}
+    .endpoint{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;background:var(--white);border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin-bottom:20px;overflow-wrap:anywhere}
+    .method{font-family:system-ui,sans-serif;font-size:11px;font-weight:800;letter-spacing:.08em;border-radius:4px;padding:3px 8px;color:#fff;background:var(--blue)}.method.put{background:#9a5b13}
+    .table-wrap{overflow-x:auto;margin:0 0 24px;border:1px solid var(--line);border-radius:8px;background:var(--white)}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;vertical-align:top;padding:11px 14px;border-bottom:1px solid var(--line);line-height:1.55}th{font-size:12px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:#fafaf7}tr:last-child td{border-bottom:0}td code{white-space:nowrap}
+    .callout{border:1px solid #c6d8ec;background:#eaf1f9;border-radius:8px;padding:14px 18px;margin:0 0 24px}.callout p{margin:0;font-size:15px}.callout.warn{border-color:#ead6b4;background:#fbf3e4}
+    .footer{display:flex;align-items:center;justify-content:space-between;gap:24px;border-top:1px solid var(--line);padding:28px 0;font-size:13px;color:var(--muted)}.footer a{color:inherit}.footer-links{display:flex;gap:24px}
+    .skip{position:absolute;top:-100px;left:20px;z-index:2;background:white;padding:12px}.skip:focus{top:12px}
+    @media(max-width:900px){.layout{grid-template-columns:minmax(0,1fr);gap:24px}.toc{position:static;max-height:none;border:1px solid var(--line);border-radius:8px;background:var(--white);padding:16px}}
+    @media(max-width:760px){.container{width:calc(100% - 32px)}.header{gap:16px}.nav{gap:16px}.nav .repo{display:none}.hero{padding:44px 0 28px}.hero .intro{font-size:16px}h2{padding-top:40px}.footer{align-items:flex-start;flex-direction:column;gap:16px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="container">
+    <header class="header">
+      <a class="brand" href="index.html" aria-label="Sagar home"><img src="assets/icon.png" alt="" width="46" height="46">Sagar</a>
+      <nav class="nav" aria-label="Main navigation"><a href="index.html#workflow">How it works</a><a href="api.html" aria-current="page">API</a><a class="repo" href="https://github.com/saturngod/Sagar/" target="_blank" rel="noopener noreferrer">Source code ↗</a></nav>
+    </header>
+
+    <div class="hero">
+      <p class="eyebrow">Developer guide</p>
+      <h1>Content Server<br>REST API</h1>
+      <p class="intro">Sagar can share its library, covers and saved chapter translations with a native client on the same local network. This guide covers every endpoint, its request and response, and the rules for syncing translations safely.</p>
+      <div class="meta"><span>API version v1</span><span>HTTP · local network</span><span>Optional Basic auth</span><span>Fill-only translation sync</span></div>
+    </div>
+
+    <div class="layout">
+      <nav class="toc" aria-label="On this page">
+        <p>On this page</p>
+        <ol>
+          <li><a href="#connection">Connection and scope</a></li>
+          <li><a href="#auth">Authentication and headers</a></li>
+          <li><a href="#endpoints">Endpoint index</a></li>
+          <li><a href="#server-info">Server information</a></li>
+          <li><a href="#books">Library</a></li>
+          <li><a href="#cover">Cover image</a></li>
+          <li><a href="#epub">Download a book</a></li>
+          <li><a href="#chapters">Chapters</a></li>
+          <li><a href="#translated">Translated chapter IDs</a></li>
+          <li><a href="#upload">Upload a translation</a></li>
+          <li><a href="#errors">Errors and limits</a></li>
+          <li><a href="#sync">Add-book and sync flow</a></li>
+        </ol>
+      </nav>
+
+      <main id="main">
+      <article>
+        <section id="connection" aria-labelledby="connection-title">
+          <h2 id="connection-title">Connection and scope</h2>
+          <p>The server is off when Sagar launches. In the library, open <strong>Settings → Content server</strong>, enter a port and optional login, then choose <strong>Start server</strong>. The port defaults to 8080; <code>0</code> picks a free port. While running, Settings shows the local-network addresses to connect to.</p>
+          <p>Use the computer's LAN IPv4 address and the port shown in Settings:</p>
+          <pre><code>http://192.168.1.20:8080</code></pre>
+          <p>The address and port are examples. The server listens on IPv4 (<code>0.0.0.0</code>). All API routes start with <code>/api/v1</code> and are case-sensitive. Opening the base address in a browser shows a read-only reader for browsing, searching and reading books (original and translation side by side). It uses the same login and cannot change anything. This API guide is public at <code>/docs</code> and contains no library data.</p>
+          <p>While running, the server shares the whole Sagar library. It supports browsing books and covers, downloading original EPUBs, and exchanging saved chapter translations. It does <strong>not</strong> import new books, delete data, overwrite existing translations, run AI, or control the server remotely. There is no discovery, QR pairing, TLS or public hosting.</p>
+          <p>The server stays on when Settings is closed and stops when Sagar quits. Settings and login are not restored at the next launch.</p>
+        </section>
+
+        <section id="auth" aria-labelledby="auth-title">
+          <h2 id="auth-title">Authentication and headers</h2>
+          <h3>Optional username and password</h3>
+          <ul>
+            <li>Both empty: authentication is disabled.</li>
+            <li>Both supplied: every API route requires HTTP Basic authentication.</li>
+            <li>Only one supplied: the server refuses to start.</li>
+            <li>The username cannot contain <code>:</code>; neither value can contain control characters.</li>
+            <li>Limits: username 256 UTF-8 bytes, password 1,024 UTF-8 bytes.</li>
+            <li>Credentials are held in memory only. They are never returned or saved.</li>
+          </ul>
+          <pre><code>Authorization: Basic &lt;base64 of UTF-8 username:password&gt;</code></pre>
+          <p>With curl, <code>--user reader</code> prompts for the password. Add it to <strong>every</strong> example below when a login is set, including EPUB and cover downloads.</p>
+          <pre><code>curl --user reader --fail-with-body \
+  'http://192.168.1.20:8080/api/v1'</code></pre>
+          <div class="callout warn"><p><strong>Use a trusted network.</strong> Plain HTTP does not encrypt credentials or book content. Without a login, anyone who can reach the server can download books and fill empty translations. Never expose the port to the internet.</p></div>
+          <h3>Request headers</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Header</th><th>Use</th></tr></thead>
+            <tbody>
+              <tr><td><code>Authorization</code></td><td>Required on every route when a login is configured</td></tr>
+              <tr><td><code>Accept: application/json</code></td><td>Appropriate for metadata and translation responses</td></tr>
+              <tr><td><code>Content-Type: application/json</code></td><td>Required for translation PUT bodies</td></tr>
+            </tbody>
+          </table></div>
+          <p>The API is for native clients. Requests carrying a browser <code>Origin</code> or <code>Sec-Fetch-Site</code> header are rejected with 403, even without a login. CORS is not enabled, and <code>Accept</code> does not change the response format.</p>
+          <p>API responses include:</p>
+          <pre><code>Cache-Control: no-store
+X-Content-Type-Options: nosniff</code></pre>
+          <p>JSON responses use <code>application/json</code>, but routing and parsing failures can return plain text. Always check the HTTP status before decoding.</p>
+        </section>
+
+        <section id="endpoints" aria-labelledby="endpoints-title">
+          <h2 id="endpoints-title">Endpoint index</h2>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Method</th><th>Path</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td>GET</td><td><a href="#server-info"><code>/api/v1</code></a></td><td>Server capabilities</td></tr>
+              <tr><td>GET</td><td><a href="#books"><code>/api/v1/books</code></a></td><td>Books with title, author and cover URL</td></tr>
+              <tr><td>GET</td><td><a href="#cover"><code>/api/v1/books/{bookId}/cover</code></a></td><td>Cover image bytes</td></tr>
+              <tr><td>GET</td><td><a href="#epub"><code>/api/v1/books/{bookId}/epub</code></a></td><td>Original, unchanged EPUB bytes</td></tr>
+              <tr><td>GET</td><td><a href="#chapters"><code>/api/v1/books/{bookId}/chapters</code></a></td><td>Chapters in reading order with saved HTML</td></tr>
+              <tr><td>GET</td><td><a href="#translated"><code>/api/v1/books/{bookId}/chapters/translated</code></a></td><td>IDs of chapters with saved translations</td></tr>
+              <tr><td>PUT</td><td><a href="#upload"><code>/api/v1/books/{bookId}/chapters/{chapterId}/translation</code></a></td><td>Fill an empty chapter, or skip existing content</td></tr>
+            </tbody>
+          </table></div>
+          <p>Successful requests return <strong>200 OK</strong>, including a PUT that skips an existing translation. There is no pagination in v1.</p>
+        </section>
+
+        <section id="server-info" aria-labelledby="server-info-title">
+          <h2 id="server-info-title">Server information</h2>
+          <div class="endpoint"><span class="method">GET</span>/api/v1</div>
+          <p>No parameters or body.</p>
+          <pre><code>curl --fail-with-body -H 'Accept: application/json' \
+  'http://192.168.1.20:8080/api/v1'</code></pre>
+          <pre><code>{
+  "name": "Sagar",
+  "apiVersion": 1,
+  "translationPolicy": "fillMissing",
+  "htmlFormat": "chapter-body-fragment"
+}</code></pre>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>name</code></td><td>string</td><td>Server application name</td></tr>
+              <tr><td><code>apiVersion</code></td><td>integer</td><td>API contract version</td></tr>
+              <tr><td><code>translationPolicy</code></td><td>string</td><td><code>fillMissing</code>: existing translations are protected</td></tr>
+              <tr><td><code>htmlFormat</code></td><td>string</td><td>HTML is a chapter body fragment, not a full XHTML document</td></tr>
+            </tbody>
+          </table></div>
+        </section>
+
+        <section id="books" aria-labelledby="books-title">
+          <h2 id="books-title">Library</h2>
+          <div class="endpoint"><span class="method">GET</span>/api/v1/books?q={search}</div>
+          <p>The optional <code>q</code> parameter filters books by a literal substring of the title or author, compared in Unicode lowercase. Surrounding whitespace is trimmed and an empty query returns all books. <code>%</code> and <code>_</code> are literal, accents are not folded, and chapter text is not searched. URL-encode the value.</p>
+          <pre><code>curl --fail-with-body -H 'Accept: application/json' \
+  'http://192.168.1.20:8080/api/v1/books'
+
+curl --fail-with-body --get -H 'Accept: application/json' \
+  --data-urlencode 'q=မြန်မာ' \
+  'http://192.168.1.20:8080/api/v1/books'</code></pre>
+          <p>The response is an array ordered by most recently updated, then book ID. No books or no matches returns <code>[]</code>.</p>
+          <pre><code>[
+  {
+    "id": "book-123",
+    "sourceSha256": "aaaaaaaa…aaaa",
+    "title": "Book A",
+    "author": "Author XXX",
+    "coverUrl": "/api/v1/books/book-123/cover",
+    "sourceLanguage": "en",
+    "targetLanguage": "my"
+  }
+]</code></pre>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>id</code></td><td>string</td><td>Server-local book ID, used in later paths</td></tr>
+              <tr><td><code>sourceSha256</code></td><td>string</td><td>SHA-256 of the original EPUB; identifies the book across apps</td></tr>
+              <tr><td><code>title</code></td><td>string</td><td>Saved title for display</td></tr>
+              <tr><td><code>author</code></td><td>string or null</td><td>Saved author, or null</td></tr>
+              <tr><td><code>coverUrl</code></td><td>string</td><td>Origin-relative cover route, listed even when no cover exists</td></tr>
+              <tr><td><code>sourceLanguage</code></td><td>string or null</td><td>Saved source language</td></tr>
+              <tr><td><code>targetLanguage</code></td><td>string</td><td>Translation language; must match exactly on upload</td></tr>
+            </tbody>
+          </table></div>
+          <p>Resolve <code>coverUrl</code> against the server origin and never put credentials in the URL. Match books for sync with <code>sourceSha256</code> plus <code>targetLanguage</code>, not by title, author or server ID.</p>
+        </section>
+
+        <section id="cover" aria-labelledby="cover-title">
+          <h2 id="cover-title">Cover image</h2>
+          <div class="endpoint"><span class="method">GET</span>/api/v1/books/{bookId}/cover</div>
+          <pre><code>curl --fail-with-body \
+  'http://192.168.1.20:8080/api/v1/books/book-123/cover' \
+  --output cover.image</code></pre>
+          <p>Returns raw image bytes (not JSON or base64):</p>
+          <pre><code>HTTP/1.1 200 OK
+Content-Type: image/png
+Content-Security-Policy: sandbox; default-src 'none'; style-src 'unsafe-inline'
+
+&lt;binary image bytes&gt;</code></pre>
+          <p>Supported types: PNG, JPEG, GIF, WebP, AVIF, BMP and SVG. Load covers as images only, never as documents.</p>
+          <p>Sagar returns the custom cover from Book Settings if one is set, otherwise the cover declared in the EPUB. Original covers larger than 4 MiB are not served. A <strong>404</strong> means the book or a usable cover is missing; show a placeholder.</p>
+        </section>
+
+        <section id="epub" aria-labelledby="epub-title">
+          <h2 id="epub-title">Download a book</h2>
+          <div class="endpoint"><span class="method">GET</span>/api/v1/books/{bookId}/epub</div>
+          <pre><code>curl --fail-with-body \
+  'http://192.168.1.20:8080/api/v1/books/book-123/epub' \
+  --output book.epub</code></pre>
+          <pre><code>HTTP/1.1 200 OK
+Content-Type: application/epub+zip
+Content-Disposition: attachment; filename="book.epub"
+
+&lt;binary EPUB bytes&gt;</code></pre>
+          <div class="callout"><p>This is the original, unchanged source EPUB, <strong>not a translated book</strong>. It contains no translations or custom cover. Fetch translations separately from the chapters endpoint.</p></div>
+          <p>Verify the file's SHA-256 against <code>sourceSha256</code> before importing it: a download can fail after the headers are sent. Range requests and resumable downloads are not supported. <strong>404</strong> means the book does not exist.</p>
+        </section>
+
+        <section id="chapters" aria-labelledby="chapters-title">
+          <h2 id="chapters-title">Chapters</h2>
+          <div class="endpoint"><span class="method">GET</span>/api/v1/books/{bookId}/chapters</div>
+          <pre><code>curl --fail-with-body -H 'Accept: application/json' \
+  'http://192.168.1.20:8080/api/v1/books/book-123/chapters'</code></pre>
+          <p>Returns chapters in OPF spine (reading) order with any saved translation HTML. A book with no chapters returns <code>[]</code>; a missing book returns 404.</p>
+          <pre><code>[
+  {
+    "id": "chapter-001",
+    "href": "EPUB/Text/chapter01.xhtml",
+    "title": "Chapter One",
+    "spineIndex": 0,
+    "document": {
+      "html": "&lt;h1&gt;အခန်း ၁&lt;/h1&gt;&lt;p&gt;မြန်မာစာ&lt;/p&gt;",
+      "status": "draft",
+      "revision": 3,
+      "authored": true
+    }
+  },
+  {
+    "id": "chapter-002",
+    "href": "EPUB/Text/chapter02.xhtml",
+    "title": "Chapter Two",
+    "spineIndex": 1,
+    "document": { "html": null, "status": "pending", "revision": 0, "authored": false }
+  }
+]</code></pre>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>id</code></td><td>string</td><td>Server-local chapter ID, used in the upload path</td></tr>
+              <tr><td><code>href</code></td><td>string</td><td>Original XHTML resource path inside the EPUB</td></tr>
+              <tr><td><code>title</code></td><td>string</td><td>Chapter label for display</td></tr>
+              <tr><td><code>spineIndex</code></td><td>integer</td><td>Reading-order position, from zero</td></tr>
+              <tr><td><code>document.html</code></td><td>string or null</td><td>Saved translation body HTML, or null</td></tr>
+              <tr><td><code>document.status</code></td><td>string</td><td><code>pending</code>, <code>draft</code>, <code>reviewed</code> or <code>skipped</code></td></tr>
+              <tr><td><code>document.revision</code></td><td>integer</td><td>Saved revision; send as <code>expectedRevision</code> on upload</td></tr>
+              <tr><td><code>document.authored</code></td><td>boolean</td><td>Saved through the chapter editor; not a presence or completion flag</td></tr>
+            </tbody>
+          </table></div>
+          <p>Don't treat a chapter as empty from <code>authored: false</code> or its status alone. Protect any non-empty HTML and any <code>skipped</code> (Keep original) choice.</p>
+          <h3>HTML and chapter mapping</h3>
+          <ul>
+            <li>HTML is a <strong>body fragment</strong>. Resolve relative image and link references against the chapter's <code>href</code> in the original EPUB; images are not bundled.</li>
+            <li>Preserve IDs, links, inline markup, meaningful whitespace and Unicode text.</li>
+            <li>Treat HTML as untrusted: render it sandboxed, without scripts, privileged APIs or uncontrolled network access.</li>
+            <li>Match chapters by original hash, target language and <code>href</code>, never by label, array index or chapter number. A table-of-contents entry can span several resources, so split such chapters into per-resource fragments before uploading.</li>
+          </ul>
+        </section>
+
+        <section id="translated" aria-labelledby="translated-title">
+          <h2 id="translated-title">Translated chapter IDs</h2>
+          <div class="endpoint"><span class="method">GET</span>/api/v1/books/{bookId}/chapters/translated</div>
+          <p>A lightweight way to learn which chapters already have translations, without downloading their HTML.</p>
+          <pre><code>curl --fail-with-body -H 'Accept: application/json' \
+  'http://192.168.1.20:8080/api/v1/books/book-123/chapters/translated'</code></pre>
+          <pre><code>{
+  "chapterIds": ["chapter-001", "chapter-003", "chapter-008"]
+}</code></pre>
+          <p><code>chapterIds</code> lists chapters with saved, non-empty translation HTML, in spine order. A book with none returns <code>{"chapterIds": []}</code>; a missing book returns 404.</p>
+          <ul>
+            <li>Drafts are included: presence does not mean the chapter is complete or reviewed.</li>
+            <li>Empty chapters and Keep original choices without content are not included, so still respect statuses from the chapters endpoint.</li>
+            <li>IDs are server-local; keep the <code>href</code> mapping rather than comparing IDs with client IDs.</li>
+            <li>This is a point-in-time view. The fill-only upload check still prevents overwrites.</li>
+          </ul>
+        </section>
+
+        <section id="upload" aria-labelledby="upload-title">
+          <h2 id="upload-title">Upload a translation</h2>
+          <div class="endpoint"><span class="method put">PUT</span>/api/v1/books/{bookId}/chapters/{chapterId}/translation</div>
+          <p>Fills a chapter that has no translation yet. It <strong>never replaces</strong> existing content, even if the incoming version is newer.</p>
+          <p>Send <code>Content-Type: application/json</code>. The UTF-8 body may be up to <strong>8 MiB</strong>; unknown fields are rejected.</p>
+          <pre><code>{
+  "sourceSha256": "aaaaaaaa…aaaa",
+  "targetLanguage": "my",
+  "href": "EPUB/Text/chapter02.xhtml",
+  "html": "&lt;h1&gt;အခန်း ၂&lt;/h1&gt;&lt;p&gt;ဘာသာပြန်ထားသော စာသား&lt;/p&gt;",
+  "expectedRevision": 0
+}</code></pre>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Field</th><th>Type</th><th>Rule</th></tr></thead>
+            <tbody>
+              <tr><td><code>sourceSha256</code></td><td>string</td><td>Must equal the book's original EPUB hash</td></tr>
+              <tr><td><code>targetLanguage</code></td><td>string</td><td>Must equal the saved target language</td></tr>
+              <tr><td><code>href</code></td><td>string</td><td>Must equal the chapter's resource path</td></tr>
+              <tr><td><code>html</code></td><td>string</td><td>Non-empty body fragment; editor HTML validation applies</td></tr>
+              <tr><td><code>expectedRevision</code></td><td>integer</td><td>Current revision from the chapters endpoint</td></tr>
+            </tbody>
+          </table></div>
+          <pre><code>curl --fail-with-body --request PUT \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  --data-binary @translation.json \
+  'http://192.168.1.20:8080/api/v1/books/book-123/chapters/chapter-002/translation'</code></pre>
+          <h3>Imported</h3>
+          <pre><code>{ "outcome": "imported", "revision": 1, "status": "draft" }</code></pre>
+          <p>Imports are always saved as <strong>drafts</strong>, never as reviewed, and progress is updated. The source EPUB is never changed.</p>
+          <h3>Skipped</h3>
+          <pre><code>{ "outcome": "skippedExisting" }</code></pre>
+          <p>Also 200 OK. The chapter already had HTML or a Keep original choice, so nothing changed. Skipping happens before HTML validation, so a skip does not mean the uploaded HTML was valid.</p>
+          <h3>Errors and retries</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Status</th><th>Meaning</th><th>What to do</th></tr></thead>
+            <tbody>
+              <tr><td>404</td><td>Book missing, or chapter not in that book</td><td>Refresh IDs</td></tr>
+              <tr><td>409 <code>identity_mismatch</code></td><td>Hash, language or <code>href</code> differs</td><td>Fix the mapping; never guess a destination</td></tr>
+              <tr><td>409 <code>revision_conflict</code></td><td>Chapter is still empty but its revision changed</td><td>Fetch chapters again and reconcile</td></tr>
+              <tr><td>413</td><td>Body too large</td><td>Don't send partial chapters as a workaround</td></tr>
+              <tr><td>422</td><td>Empty or rejected HTML</td><td>Keep local HTML, report, fix before retrying</td></tr>
+            </tbody>
+          </table></div>
+          <p>Each upload is checked and saved in a single transaction, so concurrent uploads fill a chapter once and later ones skip. If a connection drops, the save may already have succeeded: refresh the chapters before retrying. Repeating a successful upload safely returns <code>skippedExisting</code>.</p>
+        </section>
+
+        <section id="errors" aria-labelledby="errors-title">
+          <h2 id="errors-title">Errors and limits</h2>
+          <p>Domain errors return JSON. Internal errors are masked and never include book text or file paths.</p>
+          <pre><code>{
+  "code": "identity_mismatch",
+  "message": "Request could not be applied. Check book, chapter, language, revision and HTML."
+}</code></pre>
+          <p>Middleware errors include only a code, for example <code>{"code": "unauthorized"}</code>.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Status</th><th>Code / cause</th><th>What to do</th></tr></thead>
+            <tbody>
+              <tr><td>400</td><td>Malformed JSON or path</td><td>Fix the request (may be plain text)</td></tr>
+              <tr><td>401</td><td><code>unauthorized</code></td><td>Send correct credentials</td></tr>
+              <tr><td>403</td><td><code>browser_not_allowed</code></td><td>Use a native client without browser-origin headers</td></tr>
+              <tr><td>404</td><td><code>not_found</code> or unknown route</td><td>Check IDs and path</td></tr>
+              <tr><td>405</td><td>Unsupported method</td><td>Use a documented method</td></tr>
+              <tr><td>408</td><td><code>request_timeout</code></td><td>Refresh saved state before retrying writes</td></tr>
+              <tr><td>409</td><td><code>identity_mismatch</code>, <code>revision_conflict</code></td><td>Reconcile; never force an overwrite</td></tr>
+              <tr><td>413</td><td>Body too large</td><td>Report the transfer as unsupported</td></tr>
+              <tr><td>415</td><td>Missing or wrong JSON content type</td><td>Set <code>Content-Type: application/json</code></td></tr>
+              <tr><td>422</td><td>Invalid fields or translation</td><td>Fix the request or content</td></tr>
+              <tr><td>500</td><td><code>server_error</code>, <code>storage_error</code>, <code>io_error</code></td><td>Keep local work and retry later</td></tr>
+              <tr><td>503</td><td><code>storage_busy</code>, <code>server_busy</code></td><td>Back off and retry</td></tr>
+            </tbody>
+          </table></div>
+          <p>Up to eight requests are handled at once. Handlers and body reads time out after 30 seconds (408). EPUB downloads stream after the headers, so set a client-side download timeout too. A timeout does not prove a write was rolled back.</p>
+        </section>
+
+        <section id="sync" aria-labelledby="sync-title">
+          <h2 id="sync-title">Add-book and sync flow</h2>
+          <h3>Add a book from Sagar</h3>
+          <ol>
+            <li>Call <code>GET /api/v1</code> and check <code>apiVersion</code>.</li>
+            <li>List books and show title, author and cover (placeholder if missing).</li>
+            <li>Download the EPUB, verify its hash, and import it through the client's normal safe import.</li>
+            <li>Fetch chapters, map them by <code>href</code>, and copy translations only into empty local chapters.</li>
+            <li>Save imported HTML as drafts and show the results.</li>
+          </ol>
+          <h3>Sync an existing book</h3>
+          <p>Save pending local edits first, then match the book by original hash and target language. Use the translated-IDs endpoint for a quick overview and the chapters endpoint for mappings, statuses, HTML and revisions. Then for each chapter:</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Sagar (server)</th><th>Client</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr><td>Translated</td><td>Empty</td><td>Save server HTML locally, only if still empty</td></tr>
+              <tr><td>Empty</td><td>Translated</td><td>PUT local HTML with the server revision</td></tr>
+              <tr><td>Translated</td><td>Translated</td><td>Skip both, even if they differ</td></tr>
+              <tr><td>Empty</td><td>Empty</td><td>Skip</td></tr>
+              <tr><td>Keep original on either side</td><td>Any</td><td>Keep that choice; don't replace it</td></tr>
+            </tbody>
+          </table></div>
+          <p>The server protects only writes into Sagar; the client must apply its own fill-only and revision checks for downloads. There is no batch or all-or-nothing sync, so partial success is normal and re-running sync fills the remaining chapters. Show downloaded, uploaded, skipped and failed counts, and re-fetch if identities, languages or revisions change during sync.</p>
+        </section>
+      </article>
+      </main>
+    </div>
+
+    <footer class="footer"><span>Sagar · EPUB Translation Studio</span><div class="footer-links"><a href="index.html">Home</a><a href="https://github.com/saturngod/Sagar/" target="_blank" rel="noopener noreferrer">Source code</a><a href="https://github.com/saturngod/Sagar/issues" target="_blank" rel="noopener noreferrer">Feedback &amp; issues</a><a href="#main">Back to top ↑</a></div></footer>
+  </div>
+</body>
+</html>

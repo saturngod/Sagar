@@ -3,9 +3,18 @@
 API version: **v1**. This guide describes the implemented Sagar desktop server
 for the future Sagarwar client. There is no reset/delete API.
 
-Open the server base address in a browser to read this documentation. The root
+Open `/docs` on the server address in a browser to read this documentation. That
 page is public and contains no library data, even when API authentication is
 enabled. API routes retain authentication and browser-origin restrictions.
+
+The server root (`/`) is a **read-only web reader**: browse and search books, then
+read each chapter's original and saved translation side by side. It uses the same
+username and password (the browser asks for them) and cannot edit, import or
+download anything. Its data routes live under `/reader/api/` and are an internal
+detail of the page, not part of this v1 API: they accept same-origin browser GET
+requests only, reject cross-site requests and non-local host names, return
+sanitized chapter HTML, and serve only book images (no stylesheets, fonts,
+documents or EPUB downloads). Opening the reader never changes saved translations.
 
 ## 1. Connection and scope
 
@@ -16,8 +25,9 @@ http://192.168.1.20:8080
 ```
 
 The address and port above are examples, not built-in defaults. The listener
-binds `0.0.0.0` (IPv4). Port `0` selects an available port. All remote endpoints
-start with `/api/v1`. Paths are case-sensitive; use the routes exactly as listed.
+binds `0.0.0.0` (IPv4). Port `0` selects an available port. All API endpoints
+start with `/api/v1`; `/` (web reader) and `/docs` (this guide) are browser
+pages. Paths are case-sensitive; use the routes exactly as listed.
 
 The server shares the entire local Sagar library while running. It supports
 book browsing, covers, downloading original EPUBs, and exchanging saved chapter
@@ -648,6 +658,12 @@ are not automatically restored at next launch.
 - Existing cover loader: `src-tauri/src/services/projects.rs`.
 - Existing chapter save/HTML rules: `src-tauri/src/storage/documents.rs`.
 - Local command adapters: `src-tauri/src/commands/mod.rs`.
+- Read-only web reader routes and guard: `src-tauri/src/services/web_reader.rs`;
+  page assets in `src-tauri/src/services/web_reader/`.
+
+Web reader tests cover login, sanitized original/translated HTML, image-only
+resources, path traversal, GET-only routes, cross-site and non-local host
+rejection, and that reading creates no chapter document rows.
 
 Loopback tests cover authentication, no-auth mode, downloads, cover metadata,
 original/custom/missing covers, SVG response containment, identity/revision
