@@ -3411,7 +3411,7 @@ button {
   display: grid;
   gap: var(--space-3);
 }
-.content-server-settings p {
+.content-server-settings__text {
   margin: 0;
 }
 .content-server-settings__state {

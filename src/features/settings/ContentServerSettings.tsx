@@ -108,7 +108,13 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
   }
 
   const locked = busy || status === null || status.running;
-  const state = busy ? "busy" : status === null ? "unknown" : status.running ? "running" : "stopped";
+  const state = busy
+    ? "busy"
+    : status === null
+      ? "unknown"
+      : status.running
+        ? "running"
+        : "stopped";
   const stateLabel = busy
     ? action === "start"
       ? "Starting…"
@@ -154,8 +160,10 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
           </button>
         </div>
       </div>
-      <p className="dialog__muted">
-        {t("Share your library and saved translations with Sagarwar on the same network.")}
+      <p className="content-server-settings__text dialog__muted">
+        {t(
+          "Share your library and saved translations with Sagarwar on the same network.",
+        )}
       </p>
       {error ? (
         <StatusNotice
@@ -168,7 +176,9 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
       ) : null}
       {status?.running ? (
         <div className="content-server-settings__connection">
-          <p className="content-server-settings__label">{t("Connect from Sagarwar")}</p>
+          <p className="content-server-settings__text content-server-settings__label">
+            {t("Connect from Sagarwar")}
+          </p>
           {status.urls.length > 0 ? (
             <ul>
               {status.urls.map((url) => (
@@ -178,15 +188,15 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
               ))}
             </ul>
           ) : (
-            <p>
+            <p className="content-server-settings__text">
               {t("No network address found. Use this computer’s IP address with port")}{" "}
               <strong>{status.port}</strong>.
             </p>
           )}
-          <p className="dialog__muted">
+          <p className="content-server-settings__text dialog__muted">
             {t("This computer:")} <code>http://127.0.0.1:{status.port}</code>
           </p>
-          <p className="dialog__muted">
+          <p className="content-server-settings__text dialog__muted">
             {t(status.authenticationRequired ? "Login required." : "No login required.")}{" "}
             {t("If Sagarwar can’t connect, allow Sagar through the firewall.")}
           </p>
@@ -264,7 +274,10 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
               }}
             />
           </label>
-          <p className="dialog__muted" id="content-server-login-help">
+          <p
+            className="content-server-settings__text dialog__muted"
+            id="content-server-login-help"
+          >
             {t(
               "Without a login, anyone on this network can access your books. Connections aren’t encrypted, so use a trusted network.",
             )}
@@ -303,7 +316,7 @@ export function ContentServerSettings({ enabled }: { enabled: boolean }) {
               <span>{t(busy && action === "start" ? "Starting…" : "Start server")}</span>
             </button>
           )}
-          <p className="dialog__muted">
+          <p className="content-server-settings__text dialog__muted">
             {t(
               status?.running
                 ? "Stop the server to change settings."
