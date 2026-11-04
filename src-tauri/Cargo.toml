@@ -18,6 +18,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+axum = "0.8"
+local-ip-address = "0.6"
+tokio-util = { version = "0.7", features = ["io"] }
 fontdb = "0.24"
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
@@ -36,7 +39,7 @@ unicode-segmentation = "1.12"
 # Provider discovery and explicitly consented streaming translation requests.
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls", "charset"] }
 
-tokio = { version = "1", features = ["rt", "time"] }
+tokio = { version = "1", features = ["rt", "time", "net", "sync", "fs"] }
 
 tempfile = "3"
 

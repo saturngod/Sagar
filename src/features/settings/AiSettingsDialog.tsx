@@ -18,6 +18,7 @@ import type {
   CustomTestResult,
 } from "../../types/ai";
 import { type AppearancePreferences, AppearanceSettings } from "./AppearanceSettings";
+import { ContentServerSettings } from "./ContentServerSettings";
 import { TranslationModelSection } from "./TranslationModelSection";
 
 type AiSettingsDialogProps = {
@@ -62,7 +63,7 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
   const [testResults, setTestResults] = useState<Record<string, CustomTestResult>>({});
   const [form, setForm] = useState<CustomFormState>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
-  const [tab, setTab] = useState<"appearance" | "providers" | "translation">(
+  const [tab, setTab] = useState<"appearance" | "providers" | "translation" | "server">(
     "appearance",
   );
   const [actionError, setActionError] = useState<string | null>(null);
@@ -297,7 +298,7 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
         </div>
 
         <div
-          className="tabs"
+          className="tabs settings-tabs"
           role="tablist"
           aria-label={t("Settings sections")}
           onKeyDown={(event) => {
@@ -305,7 +306,7 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
               return;
             }
             event.preventDefault();
-            const tabs = ["appearance", "providers", "translation"] as const;
+            const tabs = ["appearance", "providers", "translation", "server"] as const;
             const direction = event.key === "ArrowRight" ? 1 : -1;
             const next =
               tabs[(tabs.indexOf(tab) + direction + tabs.length) % tabs.length];
@@ -352,6 +353,28 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
             <Icon name="sparkles" />
             {t("Translation Model")}
           </button>
+          <button
+            type="button"
+            role="tab"
+            id="ai-tab-server"
+            aria-selected={tab === "server"}
+            aria-controls="ai-panel-server"
+            tabIndex={tab === "server" ? 0 : -1}
+            className="tab"
+            onClick={() => setTab("server")}
+          >
+            <Icon name="server" />
+            {t("Content server")}
+          </button>
+        </div>
+
+        <div
+          role="tabpanel"
+          id="ai-panel-server"
+          aria-labelledby="ai-tab-server"
+          hidden={tab !== "server"}
+        >
+          <ContentServerSettings enabled={tab === "server"} />
         </div>
 
         <div
@@ -363,12 +386,12 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
           <AppearanceSettings {...appearance} />
         </div>
 
-        {tab !== "appearance" && loadError ? (
+        {(tab === "providers" || tab === "translation") && loadError ? (
           <StatusNotice kind="error" onRetry={loadProviders}>
             {loadError}
           </StatusNotice>
         ) : null}
-        {tab !== "appearance" && !loadError && !providers ? (
+        {(tab === "providers" || tab === "translation") && !loadError && !providers ? (
           <StatusNotice kind="loading">{t("Loading AI providers…")}</StatusNotice>
         ) : null}
 

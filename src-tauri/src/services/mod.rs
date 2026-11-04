@@ -49,3 +49,5 @@ pub fn health_check(app: &AppHandle) -> Result<HealthReport, AppError> {
         },
     })
 }
+
+pub mod content_server;

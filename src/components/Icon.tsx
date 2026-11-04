@@ -1,4 +1,7 @@
 const paths = {
+  server: "M3 3h18v7H3V3Zm0 11h18v7H3v-7ZM7 6.5h.01M7 17.5h.01M11 7h6M11 18h6",
+  play: "M7 3l14 9-14 9V3Z",
+  stop: "M5 5h14v14H5V5Z",
   moreVertical:
     "M12 4a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM12 18a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z",
   save: "M4 3h13l4 4v14H3V3h1Zm3 0v7h10V3M7 21v-7h10v7",

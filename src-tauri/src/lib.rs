@@ -124,6 +124,7 @@ fn media_type_for(resource: &str) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(services::content_server::ContentServer::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .register_uri_scheme_protocol("epubres", |ctx, request| {
@@ -131,6 +132,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::health_check,
+            commands::start_content_server,
+            commands::stop_content_server,
+            commands::content_server_status,
             commands::list_system_fonts,
             commands::import_epub,
             commands::list_projects,

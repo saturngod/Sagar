@@ -3402,3 +3402,26 @@ button {
     flex-basis: 100px;
   }
 }
+
+/* Server controls share the settings form and notice patterns. */
+.settings-tabs {
+  flex-wrap: wrap;
+}
+.content-server-settings {
+  display: grid;
+  gap: var(--space-3);
+}
+.content-server-settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.content-server-settings__connection {
+  border-top: var(--border-subtle);
+  padding-top: var(--space-3);
+  overflow-wrap: anywhere;
+}
+.content-server-settings__connection code {
+  user-select: all;
+}

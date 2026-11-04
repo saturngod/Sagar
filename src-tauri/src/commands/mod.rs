@@ -480,3 +480,24 @@ pub async fn delete_ai_selection_run(
 pub async fn list_system_fonts() -> Result<Vec<String>, AppError> {
     run_blocking(|| Ok(services::fonts::list_system_fonts())).await
 }
+
+#[tauri::command]
+pub fn start_content_server(
+    app: AppHandle,
+    server: tauri::State<'_, services::content_server::ContentServer>,
+    config: services::content_server::Config,
+) -> Result<services::content_server::Status, AppError> {
+    server.start(app_data_dir(&app)?, config)
+}
+#[tauri::command]
+pub fn stop_content_server(
+    server: tauri::State<'_, services::content_server::ContentServer>,
+) -> Result<services::content_server::Status, AppError> {
+    server.stop()
+}
+#[tauri::command]
+pub fn content_server_status(
+    server: tauri::State<'_, services::content_server::ContentServer>,
+) -> Result<services::content_server::Status, AppError> {
+    server.status()
+}

@@ -6,7 +6,21 @@ chapter on the left, write the translation on the right, review chapters, and ex
 ![](./icon.png)
 
 Built with Tauri 2, React, TypeScript and Rust; SQLite stores project data
-locally. **No** **account,** **no** **network:** **book** **content** **never** **leaves** **the** **machine.**
+locally. No account is required. Optional sharing runs only when you explicitly
+start the content server.
+
+## Content server
+
+From the library, open **Settings → Content server**. Set a port (8080 by default,
+0 for an available port), optionally enter both a username and password, then
+click **Start server**. Sagar shows local-network addresses for a client to use;
+click **Stop server** to stop sharing or change settings. Closing Settings keeps
+the server running; quitting Sagar stops it. Credentials are not saved.
+
+The server shares original EPUBs, book covers, and saved chapter translations.
+Empty credentials allow access without a login; use a trusted local network.
+See the [REST API guide](docs/reset.md) for requests, responses and sync rules.
+The Sagarwar client will be implemented separately.
 
 ## Development (Bun + Rust)
 

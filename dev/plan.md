@@ -1,5 +1,125 @@
 # Plan.md — EPUB Translation Studio
 
+### Content server settings controls — 2026-11-03
+
+Added Library → Settings → Content server with Start/Stop/Check status, port
+(8080 by default, 0 for an available port), optional username/password and
+observable loading/running/stopped/error states. Input errors focus and identify
+the affected fields; failed commands retain input. Operations prevent duplicate
+submissions. Starting/stopping restores focus to the matching action; Stop
+cancels its click default so the reused submit button cannot restart the server.
+The settings tab is independent of provider discovery, follows tab arrow-key
+navigation, and retains the existing dialog Escape/focus trap behavior.
+Running connection details replace the locked configuration fields, keeping
+Stop usable at minimum window size. No credentials or automatic-start preference
+are persisted; closing settings leaves the backend running.
+
+Status now includes `urls` discovered through local interface enumeration, using
+non-loopback IPv4 addresses and a fallback explanation when none are found.
+README and API guides describe the controls and updated status shape. Starting
+from the library follows the existing workspace save-flushing back navigation.
+No schema/EPUB changes or milestone checkbox advances.
+
+Validation: `bun run check` passed (existing bundle-size warning); the full
+frontend suite passed (105 tests, 962 assertions), and the complete Rust suite
+passed (268 passed, 6 ignored). Focused tests additionally verify invalid-field
+focus/ARIA, action focus, pending/failed commands, optional auth, restored status
+and cancellation of Stop’s default submit action. Rust formatting and
+`git diff --check` passed. A temporary browser fixture verified normal
+1280×800 and minimum 960×640 layouts, light/dark appearance, running/stopped/
+error/disabled states, keyboard startup, Stop, focus wrapping, Escape and
+reopened running status; fixture files were removed. Its server was simulated;
+real loopback API tests passed separately. Native Tauri controls, OS firewall
+prompts, Windows/Linux address discovery and physical Sagarwar interoperability
+remain unverified. Next unfinished task: implement the Sagarwar connection/book
+list/sync client and verify against rebuilt native Sagar.
+
+### Translated chapter ID inventory — 2026-11-03
+
+Added authenticated `GET /api/v1/books/{bookId}/chapters/translated`, returning
+`{chapterIds: [...]}` in spine order without returning HTML or creating chapter
+document rows. Includes saved draft/reviewed HTML and legacy block fallback;
+saved chapter documents retain precedence, including cleared drafts. Empty
+chapters and contentless Keep original choices are excluded. No misspelling
+alias was added, per the user correction. Updated both API guides with request,
+response and sync caveats: IDs are server-local, inventory is a snapshot, and
+PUT remains the authority for protecting existing work and Keep original.
+
+Validation: Rust formatting, `git diff --check`, documentation JSON/route checks,
+and all four content-server tests passed. Inventory coverage checks ordering,
+legacy fallback, cleared/empty drafts, skipped choices, book isolation,
+authentication, empty response, missing book, unsupported misspelling, and no
+document-row writes. No frontend/UI/schema or EPUB processing changes; frontend
+and full Rust suites were not repeated for this scoped endpoint. Native and
+Sagarwar network integration remain unverified. Next unfinished task: server
+settings UI, then the Sagarwar client. No milestone checkboxes changed.
+
+### Content server REST API guide — 2026-11-03
+
+Added `docs/reset.md` with all implemented routes, request/response fields,
+headers, curl examples, covers, original EPUB downloads, HTML imports, error
+handling, retry/concurrency behavior, two-way client reconciliation and local
+Tauri lifecycle commands. Linked from the existing API overview. Checked routes,
+DTOs and examples against the implementation; `git diff --check` passed.
+Documentation only: no runtime tests repeated or milestone boxes advanced.
+Next unfinished task: server settings UI, then the Sagarwar client.
+
+### Content server book covers — 2026-11-03
+
+Extended API book entries with an origin-relative `coverUrl` and added
+`GET /api/v1/books/{bookId}/cover`. The endpoint uses the existing library
+cover loader: custom Book Settings cover first, then the original EPUB cover.
+It returns image bytes with their content type, shares server authentication
+and no-store policy, and returns 404 for unavailable or unsupported covers.
+SVGs receive a sandbox content security policy. Book lists keep title/author
+and avoid embedding cover bytes or scanning source archives. API documentation
+now describes the route, custom-cover precedence and placeholder behavior.
+No UI, schema, EPUB parser or Sagarwar code changed; no milestone boxes advanced.
+
+Validation: Rust formatting, `git diff --check`, and all three focused content
+server tests passed. Real-loopback regression coverage includes original PNG,
+custom-cover precedence, no-cover/missing-book 404, SVG response containment,
+unsupported media rejection, title/author/cover URL fields, authentication, and
+immutable snapshot bytes. No frontend files changed, so frontend checks were
+not repeated. Native Sagarwar cover rendering and cross-platform networking
+remain unverified. Next unfinished task: server settings UI, followed by the
+Sagarwar book list and sync client.
+
+
+### Content server API — 2026-11-03
+
+Added an explicitly started IPv4 LAN HTTP API for the user-authorized Sagar ↔
+Sagarwar transfer workflow. API v1 lists books with original EPUB hashes,
+streams immutable source snapshots, returns spine-ordered chapter HTML/revisions,
+and imports missing chapter translations. Original hash, target language and
+chapter resource must match; one SQLite write transaction protects existing
+chapter/legacy drafts and Keep original choices. Imports use the existing HTML
+validation/revision service and arrive as drafts. Retries and concurrent uploads
+skip existing translations without replacing them.
+
+Start/stop/status Tauri commands and a typed frontend bridge are provided;
+server settings UI and Sagarwar integration remain unfinished. The server is off
+at launch, shares the local library when started, and retains credentials only
+in memory. Empty username/password disable authentication; configured credentials
+require HTTP Basic on all routes. Browser-origin requests are blocked, JSON
+bodies are bounded, database work runs off the async executor, downloads stream,
+and handler concurrency/deadlines are bounded. This is plain HTTP for trusted
+LANs; TLS, discovery, pairing and public hosting are outside this slice.
+The API contract and client reconciliation sequence are in
+`dev/content-server-api.md`. No existing milestone checkboxes advanced.
+
+Validation: `bun run check` passed (existing bundle-size warning), Rust formatting
+and the full Rust suite passed (266 passed, 6 ignored). New real-loopback HTTP
+coverage checks authentication, no-auth mode, browser rejection, downloads,
+missing books, identity/revision mismatch, empty/active HTML, oversized JSON,
+Myanmar HTML persistence, retry skipping and start/stop. Additional concurrency
+coverage checks fill-once behavior and Keep original protection. Source bytes
+remain unchanged. Native settings/editor interaction, Windows/Linux firewall
+behavior and physical Sagarwar interoperability are unverified. Next unfinished
+task: add Sagar server settings/start-stop UI with saved-editor coordination,
+then implement and verify the Sagarwar client against this API.
+
+
 ### Compact pane visibility menu — 2026-10-27
 
 Replaced the two workspace pane buttons with a vertical three-dot menu. Checked
