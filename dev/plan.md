@@ -1,5 +1,19 @@
 # Plan.md — EPUB Translation Studio
 
+### Linux and Windows ARM64 release targets — 2026-11-06
+
+Milestone 5 release follow-up: the tag-triggered release matrix now includes
+native `ubuntu-22.04-arm` and `windows-11-arm` runners with explicit ARM64 Rust
+targets. Linux dependency installation applies to both architectures. Windows
+ARM64 builds only the NSIS installer; existing x64 and macOS builds and the
+all-platform publication gate remain unchanged. No milestone checkboxes advanced.
+
+Validation: Ruby YAML parsing, six-entry matrix/ARM target assertions and
+`git diff --check` passed. `actionlint` is unavailable. Application suites were
+not run for this workflow-only change. GitHub builds and native ARM64 installer
+behavior remain unverified. Next unfinished task: run a tagged release and
+smoke-test the Windows and Linux ARM64 installers on native hardware.
+
 ### Content server root API documentation — 2026-11-04
 
 The server base URL now serves the embedded `docs/rest_api.md` as HTML with

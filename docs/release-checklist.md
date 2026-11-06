@@ -39,6 +39,10 @@ recorded evidence on the named OS; nothing is marked verified without it.
       Myanmar shaping (release target configured; execution unverified).
 - [ ] Windows: install, run, import/export, Myanmar shaping (untested).
 - [ ] Linux: install, run, import/export, Myanmar shaping (untested).
+- [ ] Windows ARM64: tagged release build and native install/import/export
+      smoke test (`windows-11-arm`, NSIS installer; execution unverified).
+- [ ] Linux ARM64: tagged release build and native install/import/export
+      smoke test (`ubuntu-22.04-arm`; execution unverified).
 - [x] macOS (Apple Silicon) bundle: `bun tauri build` produced
       `Sagar.app` (9.94 MiB) and `Sagar_0.1.0_aarch64.dmg` (5.40 MiB)
       during the 2026-10-13 release sweep;
