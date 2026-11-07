@@ -6,7 +6,7 @@ use std::{
     collections::HashSet,
     io::{BufRead, BufReader, Read, Write},
     path::Path,
-    process::{Child, Command, Stdio},
+    process::{Child, Stdio},
     sync::mpsc,
     time::{Duration, Instant},
 };
@@ -40,17 +40,68 @@ fn unavailable() -> AppError {
 struct Process(Child);
 impl Drop for Process {
     fn drop(&mut self) {
-        let _ = self.0.kill();
+        super::ai::kill_cli(&mut self.0);
         let _ = self.0.wait();
     }
 }
 
+/// Loads the catalog. Current Qoder CLIs (1.1.8x) no longer answer the
+/// `get_models` control request, so the supported `--list-models` listing
+/// comes first; the control channel remains for older CLIs that report
+/// per-model reasoning efforts.
 pub(super) fn list_models(
     binary: &Path,
     timeout: Duration,
 ) -> Result<Vec<TranslationModel>, AppError> {
+    let deadline = Instant::now() + timeout;
+    if let Ok(output) = super::ai::run_cli_output(binary, &["--list-models"], timeout)
+        && output.status.success()
+    {
+        let models = parse_model_listing(&String::from_utf8_lossy(&output.stdout));
+        if !models.is_empty() {
+            return Ok(models);
+        }
+    }
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if remaining.is_zero() {
+        return Err(unavailable());
+    }
+    list_models_control(binary, remaining)
+}
+
+/// Parses the plain `--list-models` table: an optional `MODEL` header, then
+/// one model name per line (the first column if more are ever added). The
+/// listing carries no reasoning-effort data, so only Default is offered.
+fn parse_model_listing(text: &str) -> Vec<TranslationModel> {
+    let mut seen = HashSet::new();
+    text.lines()
+        .filter_map(|line| {
+            let id = line.trim().split(['\t']).next()?.split("  ").next()?.trim();
+            if id.is_empty()
+                || id.eq_ignore_ascii_case("model")
+                || id.len() > 128
+                || id.chars().any(char::is_control)
+                || !seen.insert(id.to_owned())
+            {
+                return None;
+            }
+            Some(TranslationModel {
+                id: id.to_owned(),
+                label: id.to_owned(),
+                detail: None,
+                reasoning_efforts: Some(Vec::new()),
+            })
+        })
+        .take(500)
+        .collect()
+}
+
+fn list_models_control(
+    binary: &Path,
+    timeout: Duration,
+) -> Result<Vec<TranslationModel>, AppError> {
     let work_dir = tempfile::tempdir().map_err(|_| unavailable())?;
-    let mut command = Command::new(binary);
+    let mut command = super::ai::cli_command(binary);
     command
         .args(base_args())
         .args(["--input-format", "stream-json"])
@@ -198,6 +249,50 @@ mod tests {
         assert!(models[2].reasoning_efforts.as_ref().unwrap().is_empty());
     }
 
+    #[test]
+    fn plain_listing_skips_header_blanks_and_duplicates() {
+        let models = parse_model_listing(
+            "MODEL\nAuto\nQwen3.8-Max\n\nDeepSeek-Flash   extra column\nAuto\n",
+        );
+        let ids: Vec<_> = models.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, ["Auto", "Qwen3.8-Max", "DeepSeek-Flash"]);
+        assert!(
+            models
+                .iter()
+                .all(|m| m.reasoning_efforts.as_deref() == Some(&[][..]))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn listing_is_preferred_and_control_channel_is_fallback() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let binary = dir.path().join("qodercli");
+        let response = json!({"type":"control_response","response":{
+            "subtype":"success","request_id":"sagar-models",
+            "response":{"models":[{"value":"dfmodel","efforts":["high"]}]}
+        }});
+        for (script, expected) in [
+            (
+                "[ \"$1\" = --list-models ] && { printf 'MODEL\\nAuto\\n'; exit 0; }\nexec sleep 5"
+                    .to_string(),
+                "Auto",
+            ),
+            (
+                format!(
+                    "[ \"$1\" = --list-models ] && exit 1\nread request\nprintf '%s\\n' '{response}'\nexec sleep 5"
+                ),
+                "dfmodel",
+            ),
+        ] {
+            std::fs::write(&binary, format!("#!/bin/sh\n{script}\n")).unwrap();
+            std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
+            let models = list_models(&binary, Duration::from_secs(2)).unwrap();
+            assert_eq!(models[0].id, expected);
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn catalog_control_channel_checks_correlation_errors_and_timeout() {
@@ -218,7 +313,7 @@ mod tests {
             std::fs::write(&binary, format!("#!/bin/sh\n{script}\n")).unwrap();
             std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
             let start = Instant::now();
-            let result = list_models(&binary, Duration::from_millis(300));
+            let result = list_models_control(&binary, Duration::from_millis(300));
             assert_eq!(result.is_ok(), succeeds, "{result:?}");
             assert!(start.elapsed() < Duration::from_secs(2));
         }
@@ -231,11 +326,5 @@ mod tests {
             super::super::ai::find_cli_binary(crate::domain::CliProviderId::Qoder).unwrap();
         let models = list_models(&binary, Duration::from_secs(20)).unwrap();
         assert!(!models.is_empty());
-        assert!(models.iter().any(|model| {
-            model
-                .reasoning_efforts
-                .as_ref()
-                .is_some_and(|efforts| !efforts.is_empty())
-        }));
     }
 }

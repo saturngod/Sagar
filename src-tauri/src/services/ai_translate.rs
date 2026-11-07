@@ -313,8 +313,12 @@ fn continuation_parts(original: &str, previous: &str) -> Result<(String, String)
     ))
 }
 
-/// Fixed argument vectors per CLI. The prompt always travels as one trailing
-/// argument; no user input ever becomes a flag, and no shell is involved.
+/// Fixed argument vectors per CLI; no user input ever becomes a flag, and no
+/// shell is involved. Claude Code, Qoder and AGY receive the prompt on stdin
+/// (see [`agent_stdin`]) because Windows caps command lines (about 8 KB through
+/// npm `.cmd` launchers, 32 KB otherwise) and `cmd.exe` cannot carry
+/// multi-line arguments; chapters easily exceed both. Codex and OpenCode keep
+/// the prompt as the trailing argument only as input to their adapters.
 /// Flag choices follow each tool's documented non-interactive mode. Codex's
 /// adapter reads the model, effort and prompt from this vector and sends them
 /// through App Server instead of executing these legacy exec arguments.
@@ -343,8 +347,11 @@ pub fn agent_args(
             prompt.to_string(),
         ],
         CliProviderId::Agy => vec![
-            "-p".into(),
-            prompt.into(),
+            // An empty `--print=` value selects print mode; stream-json input
+            // then reads the prompt from stdin.
+            "--print=".into(),
+            "--input-format".into(),
+            "stream-json".into(),
             "--model".into(),
             model.into(),
             "--output-format".into(),
@@ -360,14 +367,11 @@ pub fn agent_args(
                 "--include-partial-messages".into(),
                 "--permission-mode".into(),
                 "dont_ask".into(),
-                "--".into(),
-                prompt.into(),
             ]);
             args
         }
         CliProviderId::ClaudeCode => vec![
             "-p".to_string(),
-            prompt.to_string(),
             "--model".to_string(),
             model.to_string(),
             "--output-format".to_string(),
@@ -404,6 +408,23 @@ pub fn agent_args(
     args
 }
 
+/// Bytes written to the CLI's stdin, for the CLIs that read the prompt there.
+pub fn agent_stdin(id: CliProviderId, prompt: &str) -> Option<Vec<u8>> {
+    match id {
+        CliProviderId::ClaudeCode | CliProviderId::Qoder => Some(prompt.as_bytes().to_vec()),
+        CliProviderId::Agy => {
+            let message = serde_json::json!({
+                "event": "user",
+                "message": {"role": "user", "content": prompt},
+            });
+            let mut line = serde_json::to_vec(&message).ok()?;
+            line.push(b'\n');
+            Some(line)
+        }
+        CliProviderId::Codex | CliProviderId::Opencode => None,
+    }
+}
+
 /// Output of a finished streaming run.
 #[derive(Debug)]
 pub(crate) struct StreamResult {
@@ -420,17 +441,29 @@ pub(crate) struct StreamResult {
 pub(crate) fn execute_streaming(
     binary: &Path,
     args: &[String],
+    stdin: Option<&[u8]>,
     work_dir: &Path,
     cancel: &AtomicBool,
     timeout: Duration,
     on_chunk: impl FnMut(&[u8]),
 ) -> Result<StreamResult, AppError> {
-    execute_streaming_with_progress(binary, args, work_dir, cancel, timeout, on_chunk, |_| {})
+    execute_streaming_with_progress(
+        binary,
+        args,
+        stdin,
+        work_dir,
+        cancel,
+        timeout,
+        on_chunk,
+        |_| {},
+    )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_streaming_with_progress(
     binary: &Path,
     args: &[String],
+    stdin: Option<&[u8]>,
     work_dir: &Path,
     cancel: &AtomicBool,
     timeout: Duration,
@@ -440,11 +473,15 @@ fn execute_streaming_with_progress(
     use std::io::Read as _;
 
     let failed = |message: &str| AppError::new("translation_failed", message.to_string());
-    let mut command = std::process::Command::new(binary);
+    let mut command = ai_settings::cli_command(binary);
     command
         .args(args)
         .current_dir(work_dir)
-        .stdin(std::process::Stdio::null())
+        .stdin(if stdin.is_some() {
+            std::process::Stdio::piped()
+        } else {
+            std::process::Stdio::null()
+        })
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     // Same augmented environment as the settings probes: shim-based tools
@@ -456,6 +493,16 @@ fn execute_streaming_with_progress(
     let mut child = command
         .spawn()
         .map_err(|_| failed("The translation tool could not be started."))?;
+
+    // Write the prompt on its own thread so a large prompt cannot deadlock
+    // against a full stdout pipe; dropping the pipe closes stdin (EOF).
+    if let (Some(bytes), Some(mut pipe)) = (stdin, child.stdin.take()) {
+        let bytes = bytes.to_vec();
+        std::thread::spawn(move || {
+            use std::io::Write as _;
+            let _ = pipe.write_all(&bytes);
+        });
+    }
 
     // Reader threads own their pipes; the main loop owns the child handle.
     let stdout_pipe = child.stdout.take();
@@ -513,7 +560,7 @@ fn execute_streaming_with_progress(
                     for chunk in std::iter::once(first).chain(out_rx.try_iter()) {
                         collected.extend_from_slice(&chunk);
                         if collected.len() > MAX_OUTPUT_BYTES {
-                            let _ = child.kill();
+                            ai_settings::kill_cli(&mut child);
                             let _ = child.wait();
                             return Err(AppError::new(
                                 "proposal_too_large",
@@ -537,13 +584,13 @@ fn execute_streaming_with_progress(
             Ok(Some(_)) => break,
             Ok(None) => {}
             Err(_) => {
-                let _ = child.kill();
+                ai_settings::kill_cli(&mut child);
                 let _ = child.wait();
                 return Err(failed("The translation tool reported an error."));
             }
         }
         if cancel.load(Ordering::SeqCst) {
-            let _ = child.kill();
+            ai_settings::kill_cli(&mut child);
             let _ = child.wait();
             return Err(AppError::new(
                 "translation_cancelled",
@@ -551,7 +598,7 @@ fn execute_streaming_with_progress(
             ));
         }
         if Instant::now() >= deadline {
-            let _ = child.kill();
+            ai_settings::kill_cli(&mut child);
             let _ = child.wait();
             return Err(AppError::new(
                 "translation_timeout",
@@ -931,7 +978,17 @@ impl TranslationProvider {
                         set_cli_instructions(*id, &mut args, &request.instructions, work_dir)?;
                     }
                 }
-                execute_provider_streaming(*id, binary, &args, work_dir, cancel, timeout, on_chunk)
+                let stdin = agent_stdin(*id, &request.input);
+                execute_provider_streaming(
+                    *id,
+                    binary,
+                    &args,
+                    stdin.as_deref(),
+                    work_dir,
+                    cancel,
+                    timeout,
+                    on_chunk,
+                )
             }
             Self::Custom(secret) => super::custom_stream::run_with_status(
                 secret, model, request, effort, cancel, timeout, on_chunk, on_status,
@@ -940,7 +997,12 @@ impl TranslationProvider {
     }
 }
 
-/// Use each CLI's instruction channel; the source stays in its prompt argument.
+/// File (relative to the per-job work directory) that carries instructions for
+/// Claude Code and Qoder. A file keeps long, multi-line instructions off the
+/// command line, which Windows `.cmd` launchers cannot carry safely.
+const SYSTEM_PROMPT_FILE: &str = "sagar-system-prompt.md";
+
+/// Use each CLI's instruction channel; the source stays in its own prompt.
 fn set_cli_instructions(
     id: CliProviderId,
     args: &mut Vec<String>,
@@ -949,8 +1011,10 @@ fn set_cli_instructions(
 ) -> Result<(), AppError> {
     match id {
         CliProviderId::ClaudeCode | CliProviderId::Qoder => {
-            let at = args.iter().position(|a| a == "--").unwrap_or(args.len());
-            args.splice(at..at, ["--system-prompt".into(), instructions.into()]);
+            // The CLI runs inside `work_dir`, so a relative name resolves to
+            // this job's file and no filesystem path reaches the arguments.
+            std::fs::write(work_dir.join(SYSTEM_PROMPT_FILE), instructions)?;
+            args.extend(["--system-prompt-file".into(), SYSTEM_PROMPT_FILE.into()]);
         }
         CliProviderId::Agy => {
             // AGY compiles a selected custom agent's Markdown body into its
@@ -971,10 +1035,12 @@ fn set_cli_instructions(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_provider_streaming(
     id: CliProviderId,
     binary: &Path,
     args: &[String],
+    stdin: Option<&[u8]>,
     work_dir: &Path,
     cancel: &AtomicBool,
     timeout: Duration,
@@ -982,9 +1048,10 @@ fn execute_provider_streaming(
 ) -> Result<Vec<u8>, AppError> {
     if id != CliProviderId::Agy {
         let mut stream = ProviderJsonStream::new(id);
-        let mut result = execute_streaming(binary, args, work_dir, cancel, timeout, |chunk| {
-            stream.push(chunk, &mut on_chunk)
-        })?;
+        let mut result =
+            execute_streaming(binary, args, stdin, work_dir, cancel, timeout, |chunk| {
+                stream.push(chunk, &mut on_chunk)
+            })?;
         if id == CliProviderId::Qoder {
             let proposal = stream.finish(&mut on_chunk)?;
             ensure_success(&result)?;
@@ -995,7 +1062,7 @@ fn execute_provider_streaming(
         return Ok(result.stdout);
     }
     let mut stream = AgyStream::default();
-    let mut result = execute_streaming(binary, args, work_dir, cancel, timeout, |chunk| {
+    let mut result = execute_streaming(binary, args, stdin, work_dir, cancel, timeout, |chunk| {
         stream.push(chunk, &mut on_chunk)
     })?;
     ensure_success(&result)?;
@@ -1794,7 +1861,12 @@ mod tests {
         assert!(quota.message.contains("daily usage limit"));
         let prompt = "--dangerously-skip-permissions";
         let args = agent_args(CliProviderId::Qoder, "dfmodel", prompt, Some("high"));
-        assert_eq!(&args[args.len() - 2..], &["--", prompt]);
+        // The prompt travels on stdin, so a flag-like prompt never reaches argv.
+        assert!(!args.iter().any(|a| a == prompt));
+        assert_eq!(
+            agent_stdin(CliProviderId::Qoder, prompt),
+            Some(prompt.as_bytes().to_vec())
+        );
         assert!(
             args.windows(2)
                 .any(|pair| pair == ["--reasoning-effort", "high"])
@@ -1886,7 +1958,64 @@ mod tests {
                 .any(|v| v == ["--output-format", "stream-json"])
         );
         assert!(args.windows(2).any(|v| v == ["--effort", "high"]));
-        assert!(args.windows(2).any(|v| v == ["-p", "Translate."]));
+        assert_eq!(args[0..2], ["--effort", "high"]);
+        assert_eq!(args[2], "--print=");
+        assert!(
+            args.windows(2)
+                .any(|v| v == ["--input-format", "stream-json"])
+        );
+        assert!(!args.iter().any(|a| a == "Translate."));
+        // One NDJSON line keeps multi-line Unicode prompts intact.
+        let prompt = "Translate.\n<p>မြန်မာ \"quoted\"</p>";
+        let line = agent_stdin(CliProviderId::Agy, prompt).unwrap();
+        assert_eq!(line.iter().filter(|b| **b == b'\n').count(), 1);
+        assert_eq!(line.last(), Some(&b'\n'));
+        let message: serde_json::Value = serde_json::from_slice(&line).unwrap();
+        assert_eq!(message["event"], "user");
+        assert_eq!(message["message"]["role"], "user");
+        assert_eq!(message["message"]["content"], prompt);
+    }
+
+    #[test]
+    #[ignore = "explicit authenticated installed CLI probe; sends synthetic text only"]
+    fn installed_stdin_clis_receive_multiline_prompt_and_instruction_file() {
+        // Exercises the real Claude Code, Qoder and AGY CLIs through the same
+        // argv + instruction file + stdin path a translation uses. Set
+        // SAGAR_PROBE_CLIS to a comma-separated subset (claude,qoder,agy).
+        let wanted = std::env::var("SAGAR_PROBE_CLIS").unwrap_or_default();
+        for (id, name, model) in [
+            (CliProviderId::ClaudeCode, "claude", "haiku"),
+            (CliProviderId::Qoder, "qoder", "auto"),
+            (CliProviderId::Agy, "agy", "gemini-3.8-flash-low"),
+        ] {
+            if !wanted.is_empty() && !wanted.split(',').any(|w| w.trim() == name) {
+                continue;
+            }
+            let Some(binary) = super::super::ai::find_cli_binary(id) else {
+                eprintln!("{name}: not installed, skipped");
+                continue;
+            };
+            let work = tempfile::tempdir().unwrap();
+            let prompt = "Second line holds the word to return.\nမြန်မာ\nReturn only that word inside <p></p>.";
+            let instructions = "You return HTML only.\nNever use tools.\nNever explain.";
+            let mut args = agent_args(id, model, prompt, None);
+            set_cli_instructions(id, &mut args, instructions, work.path()).unwrap();
+            let stdin = agent_stdin(id, prompt);
+            let output = execute_provider_streaming(
+                id,
+                &binary,
+                &args,
+                stdin.as_deref(),
+                work.path(),
+                &AtomicBool::new(false),
+                Duration::from_secs(180),
+                |_| {},
+            )
+            .unwrap_or_else(|error| panic!("{name}: {} ({})", error.message, error.code));
+            let text = String::from_utf8(output).unwrap();
+            eprintln!("{name}: {text:?}");
+            assert!(text.contains("မြန်မာ"), "{name} lost the multi-line prompt");
+        }
     }
 
     #[test]
@@ -1920,12 +2049,12 @@ mod tests {
         ] {
             let mut args = agent_args(id, "m", &request.input, Some("high"));
             set_cli_instructions(id, &mut args, &request.instructions, work.path()).unwrap();
-            assert_eq!(args.iter().filter(|a| **a == request.input).count(), 1);
-            assert!(
-                !args
-                    .iter()
-                    .any(|a| a.contains(&request.input) && a.contains("Keep names unchanged"))
-            );
+            // Neither the source nor the instructions travel on the command line.
+            assert!(!args.iter().any(|a| a.contains("source only")));
+            assert!(!args.iter().any(|a| a.contains("Keep names unchanged")));
+            let stdin = String::from_utf8(agent_stdin(id, &request.input).unwrap()).unwrap();
+            assert!(stdin.contains("source only"));
+            assert!(!stdin.contains("Keep names unchanged"));
             if id == CliProviderId::Agy {
                 assert!(
                     args.windows(2)
@@ -1938,12 +2067,13 @@ mod tests {
                 assert!(!config.contains(&request.input));
                 assert!(config.contains("tools: []"));
             } else {
-                let at = args.iter().position(|a| a == "--system-prompt").unwrap();
-                assert_eq!(args[at + 1], request.instructions);
-                if id == CliProviderId::Qoder {
-                    assert!(at < args.iter().position(|a| a == "--").unwrap());
-                    assert_eq!(args.last(), Some(&request.input));
-                }
+                assert_eq!(
+                    args[args.len() - 2..],
+                    ["--system-prompt-file", SYSTEM_PROMPT_FILE]
+                );
+                let saved = std::fs::read_to_string(work.path().join(SYSTEM_PROMPT_FILE)).unwrap();
+                assert_eq!(saved, request.instructions);
+                assert!(!saved.contains("source only"));
             }
         }
         let mut args = agent_args(CliProviderId::Agy, "m", &request.input, None);
@@ -2146,7 +2276,10 @@ mod tests {
             }
             let position = args.iter().position(|a| a == flag).expect("flag");
             assert_eq!(args[position + 1], value);
-            assert_eq!(args.iter().filter(|a| *a == "Translate.").count(), 1);
+            // The prompt appears exactly once: in argv or on stdin, never both.
+            let in_args = args.iter().filter(|a| *a == "Translate.").count();
+            let on_stdin = usize::from(agent_stdin(agent, "Translate.").is_some());
+            assert_eq!(in_args + on_stdin, 1);
             assert!(
                 !agent_args(agent, "model", "Translate.", None)
                     .iter()
@@ -2420,9 +2553,10 @@ mod tests {
         ) -> (Result<StreamResult, AppError>, Vec<Vec<u8>>) {
             let dir = tempfile::tempdir().expect("work dir");
             let mut chunks = Vec::new();
-            let result = execute_streaming(stub, args, dir.path(), cancel, timeout, |chunk| {
-                chunks.push(chunk.to_vec());
-            });
+            let result =
+                execute_streaming(stub, args, None, dir.path(), cancel, timeout, |chunk| {
+                    chunks.push(chunk.to_vec());
+                });
             (result, chunks)
         }
 
@@ -2434,6 +2568,7 @@ mod tests {
             let result = execute_streaming_with_progress(
                 &stub,
                 &[],
+                None,
                 dir.path(),
                 &AtomicBool::new(false),
                 Duration::from_secs(10),
@@ -2447,6 +2582,29 @@ mod tests {
         }
 
         #[test]
+        fn large_multiline_prompt_reaches_the_tool_on_stdin() {
+            // Regression for Windows: long multi-line chapters cannot travel as
+            // command-line arguments, so the prompt is written to stdin. It is
+            // far larger than a pipe buffer to prove the writer cannot deadlock
+            // against the tool echoing it back on stdout.
+            let stub = stub_script("cat");
+            let prompt = "<p>မြန်မာ \"line\"</p>\n".repeat(20_000);
+            let dir = tempfile::tempdir().unwrap();
+            let result = execute_streaming(
+                &stub,
+                &[],
+                Some(prompt.as_bytes()),
+                dir.path(),
+                &AtomicBool::new(false),
+                Duration::from_secs(10),
+                |_| {},
+            )
+            .unwrap();
+            assert!(result.status.success());
+            assert_eq!(result.stdout, prompt.as_bytes());
+        }
+
+        #[test]
         fn stderr_progress_can_cancel_a_still_running_child() {
             let stub = stub_script("echo 'thinking' >&2\nsleep 3\necho '<p>late</p>'");
             let dir = tempfile::tempdir().unwrap();
@@ -2454,6 +2612,7 @@ mod tests {
             let error = execute_streaming_with_progress(
                 &stub,
                 &[],
+                None,
                 dir.path(),
                 &cancel,
                 Duration::from_secs(10),
@@ -2482,6 +2641,7 @@ mod tests {
                     id,
                     &stub,
                     &[],
+                    None,
                     dir.path(),
                     &AtomicBool::new(false),
                     Duration::from_secs(10),
@@ -2520,6 +2680,7 @@ echo '{"event":"result","result":{"status":"SUCCESS","response":"<p>hello</p>"}}
                 CliProviderId::Agy,
                 &stub,
                 &[],
+                None,
                 dir.path(),
                 &AtomicBool::new(false),
                 Duration::from_secs(10),
@@ -2604,6 +2765,7 @@ echo '{"event":"result","result":{"status":"SUCCESS","response":"<p>hello</p>"}}
                 let error = execute_streaming(
                     &sleeping,
                     &[],
+                    None,
                     dir.path(),
                     &cancel,
                     Duration::from_secs(30),

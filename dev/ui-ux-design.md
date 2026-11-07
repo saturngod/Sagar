@@ -2,7 +2,7 @@
 
 **Status:** Design specification — not implemented or visually verified  
 **Scope:** Manual translation MVP on Windows, macOS and Linux  
-**Related:** [Master plan](plan.md), [repository rules](../AGENTS.md)
+**Related:** [Master plan](plan.md), [repository rules](../AGENTS.md), [how to build UI](../Design.md)
 
 ## 1. Design direction
 

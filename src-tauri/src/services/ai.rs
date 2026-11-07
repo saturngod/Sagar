@@ -435,16 +435,51 @@ pub(crate) fn cli_child_path_env(binary: &Path) -> Option<OsString> {
     build_child_path(binary.parent(), &combined)
 }
 
+/// Builds a command for an external CLI tool. On Windows a GUI app otherwise
+/// opens a visible console window (often shown as PowerShell or Windows
+/// Terminal) for every console child, including the `cmd.exe` that runs npm
+/// `.cmd` launchers such as Codex.
+pub(crate) fn cli_command(binary: &Path) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut command = std::process::Command::new(binary);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+}
+
+/// Stops a CLI tool and anything it started. On Windows a `.cmd` launcher runs
+/// `cmd.exe`, which starts `node.exe`; killing only `cmd.exe` leaves the tool
+/// running and holding the output pipes, so a stopped run never finishes.
+pub(crate) fn kill_cli(child: &mut std::process::Child) {
+    #[cfg(windows)]
+    if matches!(child.try_wait(), Ok(None))
+        && let Some(root) = std::env::var_os("SystemRoot")
+    {
+        let taskkill = PathBuf::from(root).join("System32").join("taskkill.exe");
+        let _ = cli_command(&taskkill)
+            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+    let _ = child.kill();
+}
+
 /// Runs a CLI with fixed arguments and a timeout. Only caller-chosen constant
 /// arguments are ever passed; no shell is involved and no user input reaches
 /// `argv`. Errors are described generically so no filesystem paths leak into
 /// messages or logs.
-fn run_cli_output(
+pub(super) fn run_cli_output(
     binary: &Path,
     args: &[&str],
     timeout: Duration,
 ) -> Result<std::process::Output, AppError> {
-    let mut command = std::process::Command::new(binary);
+    let mut command = cli_command(binary);
     command
         .args(args)
         .stdin(std::process::Stdio::null())
@@ -455,30 +490,76 @@ fn run_cli_output(
     if let Some(path) = cli_child_path_env(binary) {
         command.env("PATH", path);
     }
-    let child = command.spawn().map_err(|_| {
+    let mut child = command.spawn().map_err(|_| {
         AppError::new(
             "cli_check_failed",
             "The tool was found but could not be started.",
         )
     })?;
-    let (sender, receiver) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = sender.send(child.wait_with_output());
-    });
-    receiver
-        .recv_timeout(timeout)
-        .map_err(|_| {
-            AppError::new(
-                "cli_check_timeout",
-                "The tool was found but did not respond in time.",
-            )
-        })?
-        .map_err(|_| {
-            AppError::new(
-                "cli_check_failed",
-                "The tool was found but reported an error.",
-            )
-        })
+    let failed = || {
+        AppError::new(
+            "cli_check_failed",
+            "The tool was found but reported an error.",
+        )
+    };
+    let timed_out = || {
+        AppError::new(
+            "cli_check_timeout",
+            "The tool was found but did not respond in time.",
+        )
+    };
+    // Drain both pipes on their own threads so a chatty tool cannot block on
+    // a full pipe while this thread keeps ownership of the child. Owning the
+    // child lets a timeout stop the tool (and, on Windows, the `node.exe`
+    // behind a `.cmd` launcher) instead of leaving it running.
+    fn drain(
+        pipe: Option<impl std::io::Read + Send + 'static>,
+    ) -> std::sync::mpsc::Receiver<Vec<u8>> {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_end(&mut bytes);
+            }
+            let _ = sender.send(bytes);
+        });
+        receiver
+    }
+    let stdout = drain(child.stdout.take());
+    let stderr = drain(child.stderr.take());
+    let deadline = std::time::Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Ok(None) => {
+                kill_cli(&mut child);
+                let _ = child.wait();
+                return Err(timed_out());
+            }
+            Err(_) => {
+                kill_cli(&mut child);
+                let _ = child.wait();
+                return Err(failed());
+            }
+        }
+    };
+    // A leftover descendant can keep a pipe open after the tool exits; never
+    // wait much past the original deadline for its output.
+    let remaining = || {
+        deadline
+            .saturating_duration_since(std::time::Instant::now())
+            .max(Duration::from_millis(500))
+    };
+    let stdout = stdout.recv_timeout(remaining()).map_err(|_| timed_out())?;
+    let stderr = stderr.recv_timeout(remaining()).unwrap_or_default();
+    Ok(std::process::Output {
+        status,
+        stdout,
+        stderr,
+    })
 }
 
 /// Runs `<binary> --version` with a timeout (see [`run_cli_output`]).
@@ -1501,7 +1582,7 @@ pub fn list_translation_models(
                 agent: "qoder".into(),
                 source: "live".into(),
                 models,
-                message: "Live models and supported reasoning efforts from Qoder.".into(),
+                message: "Live models from Qoder. Reasoning effort uses Default unless Qoder reports supported levels.".into(),
             })
         }
         TranslationAgent::Cli(CliProviderId::Agy) => {
@@ -2310,6 +2391,31 @@ mod tests {
             vec![PathBuf::from("/tmp/tools/bin"), PathBuf::from("/usr/bin"),]
         );
         assert!(build_child_path(None, &[]).is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn timed_out_cli_check_stops_the_tool() {
+        // Regression: a timed-out version/model check used to leave the tool
+        // running in the background because a helper thread owned the child.
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = tempfile::tempdir().expect("temp dir");
+        let marker = dir.path().join("finished");
+        let tool = dir.path().join("slowtool");
+        std::fs::write(
+            &tool,
+            format!("#!/bin/sh\nsleep 2\ntouch '{}'\n", marker.display()),
+        )
+        .expect("stage tool");
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod tool");
+        let started = std::time::Instant::now();
+        let error =
+            run_cli_output(&tool, &[], Duration::from_millis(200)).expect_err("check times out");
+        assert_eq!(error.code, "cli_check_timeout");
+        assert!(started.elapsed() < Duration::from_secs(2));
+        std::thread::sleep(Duration::from_millis(2500));
+        assert!(!marker.exists(), "the timed-out tool kept running");
     }
 
     #[cfg(unix)]

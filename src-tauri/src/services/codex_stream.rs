@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     path::Path,
-    process::{Child, ChildStdin, Command, Stdio},
+    process::{Child, ChildStdin, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc,
@@ -30,7 +30,7 @@ fn send(pipe: &mut ChildStdin, message: &Value) -> Result<(), AppError> {
 struct Process(Child);
 impl Drop for Process {
     fn drop(&mut self) {
-        let _ = self.0.kill();
+        super::ai::kill_cli(&mut self.0);
         let _ = self.0.wait();
     }
 }
@@ -224,7 +224,7 @@ pub(super) fn run_with_instructions(
         arg.strip_prefix("model_reasoning_effort=\"")
             .and_then(|s| s.strip_suffix('"'))
     });
-    let mut command = Command::new(binary);
+    let mut command = super::ai::cli_command(binary);
     command
         .args(["app-server", "--listen", "stdio://"])
         .current_dir(cwd)

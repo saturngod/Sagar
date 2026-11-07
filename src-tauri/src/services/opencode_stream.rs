@@ -6,7 +6,7 @@ use std::{
     collections::HashMap,
     io::Read,
     path::Path,
-    process::{Child, Command, Stdio},
+    process::{Child, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc,
@@ -93,7 +93,7 @@ fn runtime_config(existing: Option<&str>) -> Result<String, AppError> {
 struct Process(Child);
 impl Drop for Process {
     fn drop(&mut self) {
-        let _ = self.0.kill();
+        super::ai::kill_cli(&mut self.0);
         let _ = self.0.wait();
     }
 }
@@ -120,7 +120,7 @@ impl Server {
     ) -> Result<Self, AppError> {
         let password = uuid::Uuid::new_v4().to_string();
         let config = runtime_config(std::env::var("OPENCODE_CONFIG_CONTENT").ok().as_deref())?;
-        let mut command = Command::new(binary);
+        let mut command = super::ai::cli_command(binary);
         command
             .args(["serve", "--hostname", "127.0.0.1", "--port", "0"])
             .current_dir(cwd)
@@ -216,7 +216,7 @@ impl Drop for Server {
                 .timeout(Duration::from_millis(500))
                 .send();
         }
-        let _ = self.process.0.kill();
+        super::ai::kill_cli(&mut self.process.0);
         let _ = self.process.0.wait();
     }
 }

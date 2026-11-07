@@ -48,6 +48,35 @@ const emptyForm: CustomFormState = {
   saving: false,
 };
 
+const protocolDefaults: Record<
+  ApiProtocol,
+  { baseUrl: string; model: string; hint: string }
+> = {
+  openai: {
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-4o-mini",
+    hint: "Uses OpenAI Chat Completions. Include the API version path in the base URL.",
+  },
+  gemini: {
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    model: "gemini-2.5-flash",
+    hint: "Uses Gemini Interactions. Use the /v1beta base URL or the full /v1beta/interactions endpoint.",
+  },
+  anthropic: {
+    baseUrl: "https://api.anthropic.com/v1",
+    model: "claude-sonnet-4-5",
+    hint: "Uses Anthropic Messages. Accepts a base URL or full /v1/messages endpoint, including compatible services such as https://api.deepseek.com/anthropic.",
+  },
+};
+
+function protocolLabel(protocol: ApiProtocol | null | undefined): string {
+  return protocol === "gemini"
+    ? "Gemini"
+    : protocol === "anthropic"
+      ? "Anthropic (Claude)"
+      : "OpenAI";
+}
+
 /**
  * AI provider settings dialog (settings-only slice): CLI availability for
  * Codex / OpenCode / Claude Code plus user-added API-compatible
@@ -70,6 +99,7 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
+  const [providerQuery, setProviderQuery] = useState("");
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLElement | null>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -86,7 +116,7 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
   useEffect(() => {
     if (formOpen) {
       formRef.current?.scrollIntoView({ block: "nearest" });
-      formRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+      formRef.current?.querySelector<HTMLElement>("select, input")?.focus();
     }
   }, [formOpen, form.editingId]);
 
@@ -272,6 +302,157 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
     }
   }
 
+  function renderProviderForm() {
+    const editingName = providers?.custom.find(
+      (provider) => provider.id === form.editingId,
+    )?.name;
+    return (
+      <section
+        ref={formRef}
+        className="provider-form"
+        aria-labelledby="provider-form-heading"
+      >
+        <h4 className="provider-form__heading" id="provider-form-heading">
+          <Icon name={form.editingId ? "edit" : "plus"} size={16} />
+          {form.editingId
+            ? `${t("Edit provider")} · ${editingName ?? ""}`
+            : t("Add provider")}
+        </h4>
+        <label className="form-field">
+          <span>{t("API format")}</span>
+          <select
+            value={form.protocol}
+            disabled={form.saving}
+            aria-describedby="provider-form-hint"
+            onChange={(event) => {
+              const protocol = event.target.value as ApiProtocol;
+              const defaults = Object.values(protocolDefaults).map(
+                (item) => item.baseUrl,
+              );
+              setForm((current) => ({
+                ...current,
+                protocol,
+                baseUrl:
+                  !current.baseUrl || defaults.includes(current.baseUrl)
+                    ? protocolDefaults[protocol].baseUrl
+                    : current.baseUrl,
+              }));
+            }}
+          >
+            <option value="openai">{t("OpenAI Compatible")}</option>
+            <option value="gemini">{t("Gemini API Compatible")}</option>
+            <option value="anthropic">{t("Anthropic (Claude) API Compatible")}</option>
+          </select>
+          <span className="form-field__hint" id="provider-form-hint">
+            {t(protocolDefaults[form.protocol].hint)}
+          </span>
+        </label>
+        <label className="form-field">
+          <span>{t("Base URL")}</span>
+          <input
+            type="url"
+            value={form.baseUrl}
+            placeholder={protocolDefaults[form.protocol].baseUrl}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, baseUrl: event.target.value }))
+            }
+            aria-invalid={form.fieldErrors.baseUrl !== undefined}
+          />
+          {form.fieldErrors.baseUrl ? (
+            <span className="form-field__error">{form.fieldErrors.baseUrl}</span>
+          ) : null}
+        </label>
+        <label className="form-field">
+          <span>
+            {t("API key")}
+            {form.editingId ? (
+              <span className="form-field__hint">
+                {t(" (leave blank to keep the saved key)")}
+              </span>
+            ) : null}
+          </span>
+          <input
+            type="password"
+            value={form.apiKey}
+            autoComplete="off"
+            onChange={(event) =>
+              setForm((current) => ({ ...current, apiKey: event.target.value }))
+            }
+            aria-invalid={form.fieldErrors.apiKey !== undefined}
+          />
+          {form.fieldErrors.apiKey ? (
+            <span className="form-field__error">{form.fieldErrors.apiKey}</span>
+          ) : null}
+        </label>
+        <div className="provider-form__pair">
+          <label className="form-field">
+            <span>{t("Model")}</span>
+            <input
+              type="text"
+              value={form.model}
+              maxLength={128}
+              placeholder={protocolDefaults[form.protocol].model}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, model: event.target.value }))
+              }
+              aria-invalid={form.fieldErrors.model !== undefined}
+            />
+            {form.fieldErrors.model ? (
+              <span className="form-field__error">{form.fieldErrors.model}</span>
+            ) : null}
+          </label>
+          <label className="form-field">
+            <span>{t("Name")}</span>
+            <input
+              type="text"
+              value={form.name}
+              maxLength={64}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, name: event.target.value }))
+              }
+              aria-invalid={form.fieldErrors.name !== undefined}
+            />
+            {form.fieldErrors.name ? (
+              <span className="form-field__error">{form.fieldErrors.name}</span>
+            ) : null}
+          </label>
+        </div>
+        <div className="button-row dialog__actions">
+          <button
+            type="button"
+            className="btn"
+            disabled={form.saving}
+            onClick={() => {
+              setForm(emptyForm);
+              setFormOpen(false);
+            }}
+          >
+            <Icon name="close" />
+            {t("Cancel")}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={form.saving}
+            onClick={() => void handleSaveForm()}
+          >
+            <Icon name="save" />
+            {form.saving ? t("Saving…") : t("Save")}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const query = providerQuery.trim().toLowerCase();
+  const visibleCustom = (providers?.custom ?? []).filter(
+    (provider) =>
+      query === "" ||
+      [provider.name, provider.model, protocolLabel(provider.protocol)].some((value) =>
+        value.toLowerCase().includes(query),
+      ),
+  );
+
   return (
     <div className="dialog-backdrop">
       <div
@@ -407,21 +588,21 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
                 <h3 className="panel__heading" id="ai-cli-heading">
                   {t("Coding assistants")}
                 </h3>
-                <ul className="provider-list">
+                <ul className="provider-tiles">
                   {providers.cli.map((provider) => {
                     const result = checkResults[provider.id];
                     const isChecking = checking[provider.id] ?? false;
+                    const tone = result?.connected
+                      ? "reviewed"
+                      : result || !provider.available
+                        ? "original"
+                        : "available";
                     return (
-                      <li key={provider.id}>
-                        <div className="provider-row">
-                          <div className="provider-row__info">
-                            <strong>{provider.label}</strong>
-                            {result?.version ? (
-                              <span className="dialog__muted">{result.version}</span>
-                            ) : null}
-                          </div>
+                      <li key={provider.id} className="provider-tile">
+                        <div className="provider-tile__info">
+                          <strong title={provider.label}>{provider.label}</strong>
                           <span
-                            className={`chapter-export-status chapter-export-status--${result?.connected ? "reviewed" : "original"}`}
+                            className={`provider-status provider-status--${tone}`}
                             role="status"
                           >
                             {isChecking
@@ -433,20 +614,21 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
                                   : provider.available
                                     ? t("Available")
                                     : t("Not found")}
+                            {result?.version ? ` · ${result.version}` : ""}
                           </span>
-                          <button
-                            type="button"
-                            className="icon-button provider-action"
-                            disabled={isChecking}
-                            aria-label={`${t("Check")} ${provider.label}`}
-                            title={`${t("Check")} ${provider.label}`}
-                            onClick={() => void handleCheck(provider.id)}
-                          >
-                            <Icon name="refresh" spin={isChecking} />
-                          </button>
                         </div>
+                        <button
+                          type="button"
+                          className="icon-button provider-action"
+                          disabled={isChecking}
+                          aria-label={`${t("Check")} ${provider.label}`}
+                          title={`${t("Check")} ${provider.label}`}
+                          onClick={() => void handleCheck(provider.id)}
+                        >
+                          <Icon name="refresh" spin={isChecking} />
+                        </button>
                         {result && !result.connected ? (
-                          <p className="provider-row__feedback" role="alert">
+                          <p className="provider-tile__feedback" role="alert">
                             {result.message}
                           </p>
                         ) : null}
@@ -460,43 +642,73 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
                 <div className="provider-section__header">
                   <h3 className="panel__heading" id="ai-custom-heading">
                     {t("Custom providers")}
+                    {providers.custom.length > 0 ? (
+                      <span className="provider-count">{providers.custom.length}</span>
+                    ) : null}
                   </h3>
-                  {!formOpen ? (
-                    <button
-                      type="button"
-                      className="btn btn--small"
-                      onClick={openAddForm}
-                    >
-                      <Icon name="plus" />
-                      {t("Add provider")}
-                    </button>
-                  ) : null}
+                  <div className="provider-section__tools">
+                    {providers.custom.length > 4 ? (
+                      <label className="library-search provider-search">
+                        <Icon name="search" size={16} />
+                        <input
+                          type="search"
+                          aria-label={t("Search providers")}
+                          placeholder={t("Search providers")}
+                          value={providerQuery}
+                          onChange={(event) => setProviderQuery(event.target.value)}
+                        />
+                      </label>
+                    ) : null}
+                    {!formOpen ? (
+                      <button
+                        type="button"
+                        className="btn btn--small"
+                        onClick={openAddForm}
+                      >
+                        <Icon name="plus" />
+                        {t("Add provider")}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
+                {formOpen && !form.editingId ? renderProviderForm() : null}
                 {providers.custom.length === 0 ? (
                   <p className="dialog__muted">{t("No custom providers yet.")}</p>
+                ) : visibleCustom.length === 0 ? (
+                  <p className="dialog__muted">{t("No providers match your search.")}</p>
                 ) : (
                   <ul className="provider-list">
-                    {providers.custom.map((provider) => {
+                    {visibleCustom.map((provider) => {
                       const result = testResults[provider.id];
                       const isTesting = testing[provider.id] ?? false;
-                      const expanded = expandedProvider === provider.id;
-                      const protocol =
-                        provider.protocol === "gemini"
-                          ? "Gemini"
-                          : provider.protocol === "anthropic"
-                            ? "Anthropic (Claude)"
-                            : "OpenAI";
+                      const expanded =
+                        expandedProvider === provider.id || confirmDelete === provider.id;
+                      const protocol = protocolLabel(provider.protocol);
+                      const editing = formOpen && form.editingId === provider.id;
                       return (
                         <li key={provider.id}>
                           <div className="provider-row">
-                            <div className="provider-row__info">
+                            <button
+                              type="button"
+                              className="provider-row__toggle"
+                              aria-expanded={expanded}
+                              aria-controls={`provider-details-${provider.id}`}
+                              title={t("Connection details")}
+                              onClick={() => {
+                                setConfirmDelete(null);
+                                setExpandedProvider(expanded ? null : provider.id);
+                              }}
+                            >
+                              <span className="provider-row__chevron" aria-hidden="true">
+                                <Icon name="chevronDown" size={16} />
+                              </span>
                               <strong>{provider.name}</strong>
-                              <span className="dialog__muted">
+                              <span className="provider-row__meta">
                                 {protocol} · {provider.model}
                               </span>
-                            </div>
+                            </button>
                             <span
-                              className={`chapter-export-status chapter-export-status--${result?.ok ? "reviewed" : "original"}`}
+                              className={`provider-status provider-status--${result?.ok ? "reviewed" : "original"}`}
                               role="status"
                             >
                               {isTesting
@@ -507,62 +719,16 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
                                     : t("Failed")
                                   : t("Saved")}
                             </span>
-                            <div className="provider-row__actions">
-                              <button
-                                type="button"
-                                className="icon-button provider-action"
-                                disabled={isTesting}
-                                aria-label={`${t("Test")} ${provider.name}`}
-                                title={`${t("Test")} ${provider.name}`}
-                                onClick={() => void handleTest(provider.id)}
-                              >
-                                <Icon name="refresh" spin={isTesting} />
-                              </button>
-                              <button
-                                type="button"
-                                className="icon-button provider-action"
-                                aria-label={`${t("Edit")} ${provider.name}`}
-                                title={`${t("Edit")} ${provider.name}`}
-                                onClick={() => openEditForm(provider)}
-                              >
-                                <Icon name="edit" />
-                              </button>
-                              <button
-                                type="button"
-                                className="icon-button provider-action"
-                                aria-expanded={expanded}
-                                aria-controls={`provider-details-${provider.id}`}
-                                aria-label={`${t("Connection details")} · ${provider.name}`}
-                                title={t("Connection details")}
-                                onClick={() =>
-                                  setExpandedProvider(expanded ? null : provider.id)
-                                }
-                              >
-                                <Icon name={expanded ? "minus" : "chevronDown"} />
-                              </button>
-                              <button
-                                type="button"
-                                className="icon-button provider-action"
-                                disabled={busyDelete}
-                                aria-label={`${t("Delete")} ${provider.name}`}
-                                title={`${t("Delete")} ${provider.name}`}
-                                onClick={() => void handleDelete(provider.id)}
-                              >
-                                <Icon name="trash" />
-                              </button>
-                            </div>
-                          </div>
-                          <div
-                            id={`provider-details-${provider.id}`}
-                            className="provider-row__details"
-                            hidden={!expanded}
-                          >
-                            <dl>
-                              <dt>{t("Base URL")}</dt>
-                              <dd>{provider.baseUrl}</dd>
-                              <dt>{t("API key")}</dt>
-                              <dd>{provider.hasApiKey ? t("key saved") : t("no key")}</dd>
-                            </dl>
+                            <button
+                              type="button"
+                              className="icon-button provider-action"
+                              disabled={isTesting}
+                              aria-label={`${t("Test")} ${provider.name}`}
+                              title={`${t("Test")} ${provider.name}`}
+                              onClick={() => void handleTest(provider.id)}
+                            >
+                              <Icon name="refresh" spin={isTesting} />
+                            </button>
                           </div>
                           {result ? (
                             <p
@@ -572,33 +738,70 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
                               {result.message}
                             </p>
                           ) : null}
-                          {confirmDelete === provider.id ? (
-                            <div className="provider-row__confirm">
-                              <p className="provider-row__confirm-label">
-                                {t("Delete provider?")} <strong>{provider.name}</strong>
-                              </p>
-                              <div className="button-row">
+                          <div
+                            id={`provider-details-${provider.id}`}
+                            className="provider-row__details"
+                            hidden={!expanded || editing}
+                          >
+                            <dl>
+                              <dt>{t("Protocol")}</dt>
+                              <dd>{protocol}</dd>
+                              <dt>{t("Model")}</dt>
+                              <dd>{provider.model}</dd>
+                              <dt>{t("Base URL")}</dt>
+                              <dd>{provider.baseUrl}</dd>
+                              <dt>{t("API key")}</dt>
+                              <dd>{provider.hasApiKey ? t("key saved") : t("no key")}</dd>
+                            </dl>
+                            {confirmDelete === provider.id ? (
+                              <div className="provider-row__confirm">
+                                <p className="provider-row__confirm-label">
+                                  {t("Delete provider?")} <strong>{provider.name}</strong>
+                                </p>
+                                <div className="button-row">
+                                  <button
+                                    type="button"
+                                    className="btn btn--small"
+                                    disabled={busyDelete}
+                                    onClick={() => setConfirmDelete(null)}
+                                  >
+                                    <Icon name="close" />
+                                    {t("Cancel")}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn--small btn--danger"
+                                    disabled={busyDelete}
+                                    onClick={() => void handleDelete(provider.id)}
+                                  >
+                                    <Icon name="trash" />
+                                    {busyDelete ? t("Deleting…") : t("Confirm delete")}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="button-row provider-row__detail-actions">
                                 <button
                                   type="button"
-                                  className="btn"
-                                  disabled={busyDelete}
-                                  onClick={() => setConfirmDelete(null)}
+                                  className="btn btn--small"
+                                  onClick={() => openEditForm(provider)}
                                 >
-                                  <Icon name="close" />
-                                  {t("Cancel")}
+                                  <Icon name="edit" />
+                                  {t("Edit")}
                                 </button>
                                 <button
                                   type="button"
-                                  className="btn btn--danger"
+                                  className="btn btn--small"
                                   disabled={busyDelete}
                                   onClick={() => void handleDelete(provider.id)}
                                 >
                                   <Icon name="trash" />
-                                  {busyDelete ? t("Deleting…") : t("Confirm delete")}
+                                  {t("Delete")}
                                 </button>
                               </div>
-                            </div>
-                          ) : null}
+                            )}
+                          </div>
+                          {editing ? renderProviderForm() : null}
                         </li>
                       );
                     })}
@@ -626,156 +829,6 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
                   )}
                 </p>
               </details>
-
-              {formOpen ? (
-                <section
-                  ref={formRef}
-                  aria-label={form.editingId ? t("Edit provider") : t("Add provider")}
-                >
-                  <label className="form-field">
-                    <span>{t("API format")}</span>
-                    <select
-                      value={form.protocol}
-                      disabled={form.saving}
-                      onChange={(event) => {
-                        const protocol = event.target.value as ApiProtocol;
-                        const defaults = {
-                          openai: "https://api.openai.com/v1",
-                          gemini: "https://generativelanguage.googleapis.com/v1beta",
-                          anthropic: "https://api.anthropic.com/v1",
-                        };
-                        setForm((current) => ({
-                          ...current,
-                          protocol,
-                          baseUrl:
-                            !current.baseUrl ||
-                            Object.values(defaults).includes(current.baseUrl)
-                              ? defaults[protocol]
-                              : current.baseUrl,
-                        }));
-                      }}
-                    >
-                      <option value="openai">{t("OpenAI Compatible")}</option>
-                      <option value="gemini">{t("Gemini API Compatible")}</option>
-                      <option value="anthropic">
-                        {t("Anthropic (Claude) API Compatible")}
-                      </option>
-                    </select>
-                  </label>
-                  <details className="settings-help">
-                    <summary>
-                      <Icon name="code" />
-                      {t("Connection details")}
-                    </summary>
-                    <p className="dialog__muted">
-                      {form.protocol === "gemini"
-                        ? "Uses Gemini Interactions without saved conversation state. Use https://generativelanguage.googleapis.com/v1beta or the full /v1beta/interactions endpoint."
-                        : form.protocol === "anthropic"
-                          ? "Uses Anthropic Messages with your API key. Accepts a base URL or full /v1/messages endpoint, including compatible services such as https://api.deepseek.com/anthropic. No CLI installation is needed."
-                          : "Uses OpenAI Chat Completions. Include the API version path in the base URL."}
-                    </p>
-                  </details>
-                  <div className="form-grid">
-                    <label className="form-field">
-                      <span>{t("Name")}</span>
-                      <input
-                        type="text"
-                        value={form.name}
-                        maxLength={64}
-                        onChange={(event) =>
-                          setForm((current) => ({ ...current, name: event.target.value }))
-                        }
-                        aria-invalid={form.fieldErrors.name !== undefined}
-                      />
-                      {form.fieldErrors.name ? (
-                        <span className="form-field__error">{form.fieldErrors.name}</span>
-                      ) : null}
-                    </label>
-                    <label className="form-field">
-                      <span>{t("Model")}</span>
-                      <input
-                        type="text"
-                        value={form.model}
-                        maxLength={128}
-                        placeholder="gpt-4o-mini"
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            model: event.target.value,
-                          }))
-                        }
-                        aria-invalid={form.fieldErrors.model !== undefined}
-                      />
-                      {form.fieldErrors.model ? (
-                        <span className="form-field__error">
-                          {form.fieldErrors.model}
-                        </span>
-                      ) : null}
-                    </label>
-                  </div>
-                  <label className="form-field">
-                    <span>{t("Base URL")}</span>
-                    <input
-                      type="url"
-                      value={form.baseUrl}
-                      placeholder="https://api.example.com/v1"
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          baseUrl: event.target.value,
-                        }))
-                      }
-                      aria-invalid={form.fieldErrors.baseUrl !== undefined}
-                    />
-                    {form.fieldErrors.baseUrl ? (
-                      <span className="form-field__error">
-                        {form.fieldErrors.baseUrl}
-                      </span>
-                    ) : null}
-                  </label>
-                  <label className="form-field">
-                    <span>
-                      {t("API key")}
-                      {form.editingId ? t(" (leave blank to keep the saved key)") : ""}
-                    </span>
-                    <input
-                      type="password"
-                      value={form.apiKey}
-                      autoComplete="off"
-                      onChange={(event) =>
-                        setForm((current) => ({ ...current, apiKey: event.target.value }))
-                      }
-                      aria-invalid={form.fieldErrors.apiKey !== undefined}
-                    />
-                    {form.fieldErrors.apiKey ? (
-                      <span className="form-field__error">{form.fieldErrors.apiKey}</span>
-                    ) : null}
-                  </label>
-                  <div className="button-row dialog__actions">
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={form.saving}
-                      onClick={() => {
-                        setForm(emptyForm);
-                        setFormOpen(false);
-                      }}
-                    >
-                      <Icon name="close" />
-                      {t("Cancel")}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      disabled={form.saving}
-                      onClick={() => void handleSaveForm()}
-                    >
-                      <Icon name="save" />
-                      {form.saving ? t("Saving…") : t("Save")}
-                    </button>
-                  </div>
-                </section>
-              ) : null}
 
               {actionError ? (
                 <StatusNotice kind="error">{actionError}</StatusNotice>

@@ -133,7 +133,8 @@ Follow existing scaffold conventions if different. Do not create speculative dir
 ### Professional UI/UX and consistency
 
 These rules apply to every new or changed screen. Use the existing Sagar design
-patterns and the latest confirmed user workflow. They do not authorize features
+patterns and the latest confirmed user workflow. See `Design.md` for tokens,
+shared components, CSS conventions and worked examples of these rules. They do not authorize features
 outside the agreed product scope.
 
 **Layout and hierarchy**
