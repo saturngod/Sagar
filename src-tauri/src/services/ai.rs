@@ -2409,12 +2409,13 @@ mod tests {
         .expect("stage tool");
         std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755))
             .expect("chmod tool");
-        let started = std::time::Instant::now();
         let error =
             run_cli_output(&tool, &[], Duration::from_millis(200)).expect_err("check times out");
         assert_eq!(error.code, "cli_check_timeout");
-        assert!(started.elapsed() < Duration::from_secs(2));
-        std::thread::sleep(Duration::from_millis(2500));
+        // Check the marker rather than wall-clock time: login-shell PATH
+        // discovery runs before the tool starts and can be slow under load.
+        assert!(!marker.exists(), "the check waited for the tool to finish");
+        std::thread::sleep(Duration::from_millis(3000));
         assert!(!marker.exists(), "the timed-out tool kept running");
     }
 
