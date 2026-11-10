@@ -247,6 +247,7 @@ export const ko: Record<string, string> = {
   "Add provider": "제공자 추가",
   "Live list": "실시간 목록",
   "Known list": "확인된 목록",
+  "Cached list": "저장된 목록",
   "No models were listed for this agent.": "이 에이전트의 모델 목록이 없습니다.",
   "No models match your search.": "검색 결과에 해당하는 모델이 없습니다.",
   "Save settings": "설정 저장",

@@ -257,6 +257,7 @@ export const shn: Record<string, string> = {
   " (leave blank to keep the saved key)": " (ပွႆႇလွၵ်းဝၢင်ႇဝႆႉ ႁႂ်ႈသိုပ်ႇၸႂ်ႉ key ဢၼ်သိမ်းဝႆႉ)",
   "Live list": "သဵၼ်ႈမၢႆလႅပ်ႈ",
   "Known list": "သဵၼ်ႈမၢႆဢၼ်ႁူႉဝႆႉ",
+  "Cached list": "သဵၼ်ႈမၢႆဢၼ်ၵဵပ်းဝႆႉ",
   "No models were listed for this agent.": "ဢမ်ႇမီးသဵၼ်ႈမၢႆမေႃႇတႄႇလ် တႃႇဢေႇၵျႅၼ်ႉၼႆႉ။",
   "No models match your search.": "ဢမ်ႇမီးမေႃႇတႄႇလ် ဢၼ်ၵိုင်ႇမႅၼ်ႈၵၢၼ်ၶူၼ်ႉႁႃ။",
   "Save settings": "သိမ်းၵၢၼ်တင်ႈၵႃႈ",

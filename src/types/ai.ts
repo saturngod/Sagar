@@ -49,7 +49,7 @@ export type TranslationModel = {
 
 export type TranslationModelList = {
   agent: string;
-  source: "live" | "catalog";
+  source: "live" | "cached" | "catalog";
   models: TranslationModel[];
   message: string;
 };

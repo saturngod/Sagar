@@ -60,11 +60,11 @@ export function TranslationModelSection({ cli, custom }: TranslationModelSection
   const [manualOpen, setManualOpen] = useState(false);
   const catalogRequest = useRef(0);
 
-  const loadCatalog = useCallback((nextAgent: string) => {
+  const loadCatalog = useCallback((nextAgent: string, refresh = false) => {
     const request = ++catalogRequest.current;
     setLoading(true);
     setLoadError(null);
-    listTranslationModels(nextAgent)
+    listTranslationModels(nextAgent, refresh)
       .then((list) => {
         if (request !== catalogRequest.current) return;
         setCatalog(list);
@@ -239,7 +239,7 @@ export function TranslationModelSection({ cli, custom }: TranslationModelSection
           type="button"
           className="icon-button model-settings__refresh"
           disabled={loading}
-          onClick={() => loadCatalog(agent)}
+          onClick={() => loadCatalog(agent, true)}
           aria-label={t("Refresh models")}
           title={t("Refresh models")}
         >
@@ -379,7 +379,12 @@ export function TranslationModelSection({ cli, custom }: TranslationModelSection
         ) : null}
         {catalog?.agent === agent ? (
           <p className="dialog__muted">
-            {catalog.source === "live" ? t("Live list") : t("Known list")} ·{" "}
+            {catalog.source === "live"
+              ? t("Live list")
+              : catalog.source === "cached"
+                ? t("Cached list")
+                : t("Known list")}{" "}
+            ·{" "}
             {catalog.message}
           </p>
         ) : null}

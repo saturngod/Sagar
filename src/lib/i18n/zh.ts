@@ -246,6 +246,7 @@ export const zh: Record<string, string> = {
   "Add provider": "添加服务提供方",
   "Live list": "实时列表",
   "Known list": "已知列表",
+  "Cached list": "缓存列表",
   "No models were listed for this agent.": "此代理没有提供模型列表。",
   "No models match your search.": "没有符合搜索条件的模型。",
   "Save settings": "保存设置",

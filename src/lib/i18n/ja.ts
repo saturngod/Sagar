@@ -247,6 +247,7 @@ export const ja: Record<string, string> = {
   "Add provider": "プロバイダーを追加",
   "Live list": "最新の一覧",
   "Known list": "既知の一覧",
+  "Cached list": "保存済みの一覧",
   "No models were listed for this agent.": "このエージェントのモデル一覧はありません。",
   "No models match your search.": "検索に一致するモデルはありません。",
   "Save settings": "設定を保存",

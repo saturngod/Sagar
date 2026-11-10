@@ -256,6 +256,7 @@ export const my: Record<string, string> = {
   " (leave blank to keep the saved key)": " (သိမ်းထားသော သော့ကို ဆက်သုံးရန် အလွတ်ထားပါ)",
   "Live list": "လက်ရှိ စာရင်း",
   "Known list": "သိရှိထားသော စာရင်း",
+  "Cached list": "သိမ်းထားသော စာရင်း",
   "No models were listed for this agent.": "ဤအကူအတွက် မော်ဒယ်စာရင်း မရှိပါ။",
   "No models match your search.": "ရှာဖွေမှုနှင့် ကိုက်ညီသော မော်ဒယ် မရှိပါ။",
   "Save settings": "ဆက်တင်များ သိမ်းရန်",

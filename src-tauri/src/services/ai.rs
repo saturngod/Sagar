@@ -993,10 +993,9 @@ const CODEX_KNOWN_MODELS: &[(&str, &str)] = &[
     ("gpt-5.3-codex-spark", "Near-instant iteration"),
 ];
 
-/// Claude Code offers no machine-readable model list, so this built-in
-/// catalog of aliases and current full IDs is the source. Any model ID can
-/// still be entered manually.
-const CLAUDE_KNOWN_MODELS: &[(&str, &str)] = &[
+/// Claude Code aliases. Always listed first; Claude Code resolves them to
+/// the newest model in each line.
+const CLAUDE_ALIASES: &[(&str, &str)] = &[
     (
         "sonnet",
         "Sonnet alias — best speed and intelligence balance",
@@ -1004,15 +1003,26 @@ const CLAUDE_KNOWN_MODELS: &[(&str, &str)] = &[
     ("opus", "Opus alias — most capable"),
     ("haiku", "Haiku alias — fastest"),
     ("fable", "Fable alias — long-running agents"),
-    ("claude-sonnet-5", "Sonnet 5"),
+];
+
+/// Built-in full model IDs (Anthropic models overview, current + legacy
+/// still available). Used when models.dev is unavailable and to fill gaps
+/// in its list. Any model ID can still be entered manually.
+const CLAUDE_KNOWN_MODELS: &[(&str, &str)] = &[
+    ("claude-fable-5-2", "Fable 5.2"),
     ("claude-opus-5-5", "Opus 5.5"),
+    ("claude-sonnet-5-5", "Sonnet 5.5"),
+    ("claude-haiku-5-5", "Haiku 5.5"),
+    ("claude-fable-5-1", "Fable 5.1"),
+    ("claude-fable-5", "Fable 5"),
     ("claude-opus-5", "Opus 5"),
-    ("claude-haiku-4-5", "Haiku 4.5"),
+    ("claude-sonnet-5", "Sonnet 5"),
     ("claude-opus-4-8", "Opus 4.8"),
     ("claude-opus-4-7", "Opus 4.7"),
-    ("claude-sonnet-4-6", "Sonnet 4.6"),
     ("claude-opus-4-6", "Opus 4.6"),
-    ("claude-fable-5-1", "Fable 5.1"),
+    ("claude-sonnet-4-6", "Sonnet 4.6"),
+    ("claude-opus-4-5", "Opus 4.5"),
+    ("claude-haiku-4-5", "Haiku 4.5"),
 ];
 
 fn known_models(entries: &[(&str, &str)]) -> Vec<TranslationModel> {
@@ -1025,6 +1035,242 @@ fn known_models(entries: &[(&str, &str)]) -> Vec<TranslationModel> {
             reasoning_efforts: None,
         })
         .collect()
+}
+
+const MODELS_DEV_URL: &str = "https://models.dev/models.json";
+const MODELS_DEV_CACHE_KEY: &str = "claude_models_dev_cache";
+const MODELS_DEV_FAILED_KEY: &str = "claude_models_dev_failed_at";
+/// A successful fetch is reused for a day.
+const MODELS_DEV_TTL_SECS: i64 = 24 * 60 * 60;
+/// After a failed fetch, wait this long before trying again automatically,
+/// so opening the picker offline does not block on the network every time.
+const MODELS_DEV_RETRY_SECS: i64 = 60 * 60;
+const MODELS_DEV_MAX_BYTES: usize = 8 * 1024 * 1024;
+/// models.dev still lists older undated aliases (Opus 4.0/4.1, Sonnet 4.x)
+/// that Anthropic no longer lists as available. Haiku 4.5 is the oldest
+/// model on the Anthropic models overview, so anything earlier is hidden.
+const MODELS_DEV_MIN_RELEASE: &str = "2025-10-15";
+
+/// Serialises the read-check-fetch-write cycle so concurrent picker loads
+/// share one download instead of racing.
+static MODELS_DEV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+struct CachedModel {
+    id: String,
+    name: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ModelsDevCache {
+    fetched_at: i64,
+    models: Vec<CachedModel>,
+}
+
+/// Picks the Anthropic entries from a models.dev `models.json` body, newest
+/// first. Dated duplicates, models older than the Anthropic docs' legacy
+/// list and non-public Mythos models are hidden.
+fn parse_models_dev(body: &serde_json::Value) -> Vec<CachedModel> {
+    let mut found: Vec<(String, CachedModel)> = body
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(key, value)| {
+            let id = key.strip_prefix("anthropic/")?;
+            let released = value["release_date"].as_str().unwrap_or("");
+            let dated = id.rsplit_once('-').is_some_and(|(_, tail)| {
+                tail.len() == 8 && tail.bytes().all(|c| c.is_ascii_digit())
+            });
+            if dated
+                || released < MODELS_DEV_MIN_RELEASE
+                || id.contains("mythos")
+                || !id.starts_with("claude-")
+                || clean_model_id(id).is_none()
+            {
+                return None;
+            }
+            let name = value["name"].as_str().unwrap_or(id);
+            let name = name.strip_prefix("Claude ").unwrap_or(name);
+            Some((
+                released.to_string(),
+                CachedModel {
+                    id: id.to_string(),
+                    name: name.chars().take(80).collect(),
+                },
+            ))
+        })
+        .collect();
+    found.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.id.cmp(&b.1.id)));
+    found.into_iter().map(|(_, model)| model).collect()
+}
+
+fn fetch_models_dev(url: &str) -> Result<Vec<CachedModel>, AppError> {
+    let failed = || AppError::new("models_unavailable", "models.dev could not be reached.");
+    let client = reqwest::blocking::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(MODELS_TIMEOUT)
+        .build()
+        .map_err(|_| failed())?;
+    let response = client
+        .get(url)
+        .header("Accept", "application/json")
+        .send()
+        .map_err(|_| failed())?;
+    if !response.status().is_success() {
+        return Err(failed());
+    }
+    if response
+        .content_length()
+        .is_some_and(|len| len > MODELS_DEV_MAX_BYTES as u64)
+    {
+        return Err(failed());
+    }
+    let bytes = response.bytes().map_err(|_| failed())?;
+    if bytes.len() > MODELS_DEV_MAX_BYTES {
+        return Err(failed());
+    }
+    let body: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| failed())?;
+    let models = parse_models_dev(&body);
+    if models.is_empty() {
+        return Err(failed());
+    }
+    Ok(models)
+}
+
+fn read_meta(conn: &rusqlite::Connection, key: &str) -> Option<String> {
+    conn.query_row("SELECT value FROM app_meta WHERE key = ?1", [key], |row| {
+        row.get(0)
+    })
+    .ok()
+}
+
+/// The cache is an optimisation: a failed write must not fail the list.
+fn write_meta(conn: &rusqlite::Connection, key: &str, value: &str) {
+    let _ = conn.execute(
+        "INSERT INTO app_meta(key, value) VALUES(?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![key, value],
+    );
+}
+
+fn read_models_cache(conn: &rusqlite::Connection) -> Option<ModelsDevCache> {
+    serde_json::from_str(&read_meta(conn, MODELS_DEV_CACHE_KEY)?).ok()
+}
+
+fn write_models_cache(conn: &rusqlite::Connection, cache: &ModelsDevCache) {
+    if let Ok(raw) = serde_json::to_string(cache) {
+        write_meta(conn, MODELS_DEV_CACHE_KEY, &raw);
+    }
+}
+
+/// Aliases first, then models.dev entries, then built-in IDs it lacks.
+fn merge_claude_models(live: &[CachedModel]) -> Vec<TranslationModel> {
+    let mut models = known_models(CLAUDE_ALIASES);
+    models.extend(live.iter().map(|model| TranslationModel {
+        id: model.id.clone(),
+        label: model.id.clone(),
+        detail: Some(model.name.clone()),
+        reasoning_efforts: None,
+    }));
+    for entry in known_models(CLAUDE_KNOWN_MODELS) {
+        if !models.iter().any(|model| model.id == entry.id) {
+            models.push(entry);
+        }
+    }
+    models
+}
+
+/// Claude Code has no model-list command. Use the models.dev cache while it
+/// is under a day old, refresh when stale or when `refresh` is set, and fall
+/// back to an older cache and then the built-in list. Nothing but a plain
+/// GET is sent; no book content or credentials.
+fn claude_model_catalog(
+    conn: &rusqlite::Connection,
+    refresh: bool,
+) -> (Vec<TranslationModel>, String, String) {
+    claude_model_catalog_from(
+        conn,
+        refresh,
+        MODELS_DEV_URL,
+        chrono::Utc::now().timestamp(),
+    )
+}
+
+fn within(now: i64, since: i64, window: i64) -> bool {
+    now >= since && now - since < window
+}
+
+fn claude_model_catalog_from(
+    conn: &rusqlite::Connection,
+    refresh: bool,
+    url: &str,
+    now: i64,
+) -> (Vec<TranslationModel>, String, String) {
+    let _guard = MODELS_DEV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let cached = read_models_cache(conn);
+    let fallback = |cached: Option<ModelsDevCache>, message: &str| match cached {
+        Some(cache) => (
+            merge_claude_models(&cache.models),
+            "cached".to_string(),
+            format!("{message} Showing the last saved list from models.dev."),
+        ),
+        None => {
+            let mut models = known_models(CLAUDE_ALIASES);
+            models.extend(known_models(CLAUDE_KNOWN_MODELS));
+            (
+                models,
+                "catalog".to_string(),
+                format!(
+                    "{message} Showing built-in models; any model ID can also be entered manually."
+                ),
+            )
+        }
+    };
+    if !refresh {
+        if let Some(cache) = cached.as_ref()
+            && within(now, cache.fetched_at, MODELS_DEV_TTL_SECS)
+        {
+            return (
+                merge_claude_models(&cache.models),
+                "cached".into(),
+                "Saved from models.dev; updated at most once a day. Use Refresh models to update now."
+                    .into(),
+            );
+        }
+        let failed_at = read_meta(conn, MODELS_DEV_FAILED_KEY).and_then(|v| v.parse().ok());
+        if failed_at.is_some_and(|at| within(now, at, MODELS_DEV_RETRY_SECS)) {
+            return fallback(
+                cached,
+                "models.dev could not be reached recently; Refresh models tries again now.",
+            );
+        }
+    }
+    match fetch_models_dev(url) {
+        Ok(models) => {
+            write_models_cache(
+                conn,
+                &ModelsDevCache {
+                    fetched_at: now,
+                    models: models.clone(),
+                },
+            );
+            let _ = conn.execute(
+                "DELETE FROM app_meta WHERE key = ?1",
+                [MODELS_DEV_FAILED_KEY],
+            );
+            (
+                merge_claude_models(&models),
+                "live".into(),
+                "Updated from models.dev. Any model ID can also be entered manually.".into(),
+            )
+        }
+        Err(_) => {
+            write_meta(conn, MODELS_DEV_FAILED_KEY, &now.to_string());
+            fallback(cached, "models.dev could not be reached.")
+        }
+    }
 }
 
 /// Validates a model ID from any source: non-empty, bounded, no control
@@ -1310,7 +1556,7 @@ pub fn validate_reasoning_effort(
     } else if agent == "claude_code" {
         Some(claude_efforts(model))
     } else if matches!(agent, "codex" | "opencode" | "qoder") {
-        list_translation_models(data_dir, agent)?
+        list_translation_models(data_dir, agent, false)?
             .models
             .into_iter()
             .find(|entry| entry.id == model)
@@ -1499,6 +1745,7 @@ fn find_cli_or_unavailable(id: CliProviderId) -> Result<PathBuf, AppError> {
 pub fn list_translation_models(
     data_dir: &Path,
     agent: &str,
+    refresh: bool,
 ) -> Result<TranslationModelList, AppError> {
     // Ensure migrations ran so custom-provider lookups never hit a missing table.
     let conn = open_settings_db(data_dir)?;
@@ -1601,19 +1848,21 @@ pub fn list_translation_models(
                 message: "Live list from agy; a model ID can also be entered manually.".into(),
             })
         }
-        TranslationAgent::Cli(CliProviderId::ClaudeCode) => Ok(TranslationModelList {
-            agent: CliProviderId::ClaudeCode.as_str().to_string(),
-            source: "catalog".to_string(),
-            models: known_models(CLAUDE_KNOWN_MODELS)
-                .into_iter()
-                .map(|mut model| {
-                    model.reasoning_efforts = Some(claude_efforts(&model.id));
-                    model
-                })
-                .collect(),
-            message: "Known models for Claude Code; any model ID can also be entered manually."
-                .to_string(),
-        }),
+        TranslationAgent::Cli(CliProviderId::ClaudeCode) => {
+            let (models, source, message) = claude_model_catalog(&conn, refresh);
+            Ok(TranslationModelList {
+                agent: CliProviderId::ClaudeCode.as_str().to_string(),
+                source,
+                models: models
+                    .into_iter()
+                    .map(|mut model| {
+                        model.reasoning_efforts = Some(claude_efforts(&model.id));
+                        model
+                    })
+                    .collect(),
+                message,
+            })
+        }
         TranslationAgent::Custom(id) => {
             let secret = ai_providers::get_secret(&conn, &id)?;
             match fetch_api_models(&secret.base_url, &secret.api_key, &secret.protocol) {
@@ -1790,7 +2039,7 @@ mod tests {
             assert_eq!(saved.protocol, protocol);
             assert!(test_ai_custom_provider(dir.path(), &saved.id).unwrap().ok);
             let agent = format!("custom:{}", saved.id);
-            let models = list_translation_models(dir.path(), &agent).unwrap();
+            let models = list_translation_models(dir.path(), &agent, false).unwrap();
             assert_eq!(models.source, "live");
             assert_eq!(models.models.len(), 1);
             assert_eq!(
@@ -2441,5 +2690,118 @@ mod tests {
             String::from_utf8_lossy(&output.stdout).contains("runtime-ok"),
             "runtime resolved through child PATH"
         );
+    }
+    #[test]
+    fn models_dev_parse_keeps_current_anthropic_models_newest_first() {
+        let body = serde_json::json!({
+            "openai/gpt-5": {"name":"GPT-5","release_date":"2026-01-01"},
+            "anthropic/claude-3-haiku-20240307": {"name":"Claude Haiku 3","release_date":"2024-03-13"},
+            "anthropic/claude-opus-4-1": {"name":"Claude Opus 4.1 (latest)","release_date":"2025-08-05"},
+            "anthropic/claude-sonnet-4-5": {"name":"Claude Sonnet 4.5 (latest)","release_date":"2025-09-29"},
+            "anthropic/claude-haiku-4-5-20251001": {"name":"Claude Haiku 4.5","release_date":"2025-10-15"},
+            "anthropic/claude-haiku-4-5": {"name":"Claude Haiku 4.5 (latest)","release_date":"2025-10-15"},
+            "anthropic/claude-mythos-5": {"name":"Claude Mythos 5","release_date":"2026-06-09"},
+            "anthropic/claude-opus-5-5": {"name":"Claude Opus 5.5","release_date":"2026-09-22"},
+            "anthropic/claude-haiku-5-5": {"name":"Claude Haiku 5.5","release_date":"2026-10-07"},
+            "anthropic/claude-undated": {"name":"Claude Undated"},
+        });
+        let models = parse_models_dev(&body);
+        let ids: Vec<_> = models.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["claude-haiku-5-5", "claude-opus-5-5", "claude-haiku-4-5"]
+        );
+        assert_eq!(models[0].name, "Haiku 5.5");
+    }
+
+    #[test]
+    fn claude_merge_puts_aliases_first_then_live_then_missing_builtins() {
+        let live = vec![
+            CachedModel {
+                id: "claude-future-6".into(),
+                name: "Future 6".into(),
+            },
+            CachedModel {
+                id: "claude-opus-5-5".into(),
+                name: "Opus 5.5".into(),
+            },
+        ];
+        let ids: Vec<_> = merge_claude_models(&live)
+            .into_iter()
+            .map(|m| m.id)
+            .collect();
+        assert_eq!(
+            &ids[..CLAUDE_ALIASES.len()],
+            &["sonnet", "opus", "haiku", "fable"]
+        );
+        assert_eq!(ids[CLAUDE_ALIASES.len()], "claude-future-6");
+        assert_eq!(ids.iter().filter(|id| *id == "claude-opus-5-5").count(), 1);
+        assert!(ids.contains(&"claude-haiku-4-5".to_string()));
+    }
+
+    fn models_meta_db() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);")
+            .unwrap();
+        conn
+    }
+
+    /// Serves `body` to each of `hits` connections and returns the URL.
+    fn serve_models_json(body: &'static str, hits: usize) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/models.json", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            for _ in 0..hits {
+                let (mut socket, _) = listener.accept().unwrap();
+                let mut request = [0u8; 2048];
+                let _ = socket.read(&mut request);
+                write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
+            }
+        });
+        url
+    }
+
+    const DEAD_URL: &str = "http://127.0.0.1:9/models.json";
+
+    #[test]
+    fn claude_catalog_fetches_saves_and_then_serves_from_cache() {
+        let conn = models_meta_db();
+        let url = serve_models_json(
+            r#"{"anthropic/claude-haiku-5-5":{"name":"Claude Haiku 5.5","release_date":"2026-10-07"}}"#,
+            1,
+        );
+        let (models, source, _) = claude_model_catalog_from(&conn, false, &url, 10_000);
+        assert_eq!(source, "live");
+        assert!(models.iter().any(|m| m.id == "claude-haiku-5-5"));
+        let saved = read_models_cache(&conn).unwrap();
+        assert_eq!(saved.fetched_at, 10_000);
+        assert_eq!(saved.models.len(), 1);
+        // Within a day the saved list is used and the network is not touched.
+        let (models, source, _) = claude_model_catalog_from(&conn, false, DEAD_URL, 10_000 + 3_600);
+        assert_eq!(source, "cached");
+        assert!(models.iter().any(|m| m.id == "claude-haiku-5-5"));
+        // A forced refresh fetches even though the cache is fresh.
+        let (_, source, _) = claude_model_catalog_from(&conn, true, DEAD_URL, 10_000 + 60);
+        assert_eq!(source, "cached");
+        assert!(read_meta(&conn, MODELS_DEV_FAILED_KEY).is_some());
+    }
+
+    #[test]
+    fn claude_catalog_backs_off_after_a_failure_until_refresh() {
+        let conn = models_meta_db();
+        let (models, source, _) = claude_model_catalog_from(&conn, false, DEAD_URL, 5_000);
+        assert_eq!(source, "catalog");
+        assert!(models.iter().any(|m| m.id == "claude-haiku-5-5"));
+        // A working server within the back-off window is not contacted.
+        let body = r#"{"anthropic/claude-future-6":{"name":"Claude Future 6","release_date":"2027-01-01"}}"#;
+        let url = serve_models_json(body, 1);
+        let (_, source, _) = claude_model_catalog_from(&conn, false, &url, 5_000 + 60);
+        assert_eq!(source, "catalog");
+        // Refresh ignores the back-off, and success clears the failure marker.
+        let (models, source, _) = claude_model_catalog_from(&conn, true, &url, 5_000 + 120);
+        assert_eq!(source, "live");
+        assert!(models.iter().any(|m| m.id == "claude-future-6"));
+        assert!(read_meta(&conn, MODELS_DEV_FAILED_KEY).is_none());
     }
 }

@@ -70,9 +70,13 @@ export async function testAiCustomProvider(id: string): Promise<CustomTestResult
 
 export async function listTranslationModels(
   agent: string,
+  refresh = false,
 ): Promise<TranslationModelList> {
   try {
-    return await invoke<TranslationModelList>("list_translation_models", { agent });
+    return await invoke<TranslationModelList>("list_translation_models", {
+      agent,
+      refresh,
+    });
   } catch (error) {
     throw toCommandError(error);
   }

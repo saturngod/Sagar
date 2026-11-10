@@ -258,6 +258,7 @@ export const rki: Record<string, string> = {
   " (leave blank to keep the saved key)": " (သိမ်းထားရေ သော့ကို ဆက်သုံးဖို့ အလွတ်ထားပါ)",
   "Live list": "လက်ဟိ စာရင်း",
   "Known list": "သိရှိထားရေ စာရင်း",
+  "Cached list": "သိမ်းထားရေ စာရင်း",
   "No models were listed for this agent.": "အေအကူအတွက် မော်ဒယ်စာရင်း မဟိပါ။",
   "No models match your search.": "ရှာရေစာနန့် ကိုက်ညီရေ မော်ဒယ် မဟိပါ။",
   "Save settings": "ဆက်တင်တိ သိမ်းဖို့",

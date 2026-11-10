@@ -340,9 +340,11 @@ pub async fn test_ai_custom_provider(
 pub async fn list_translation_models(
     app: AppHandle,
     agent: String,
+    refresh: Option<bool>,
 ) -> Result<TranslationModelList, AppError> {
     let data_dir = app_data_dir(&app)?;
-    run_blocking(move || services::ai::list_translation_models(&data_dir, &agent)).await
+    let refresh = refresh.unwrap_or(false);
+    run_blocking(move || services::ai::list_translation_models(&data_dir, &agent, refresh)).await
 }
 
 #[tauri::command]

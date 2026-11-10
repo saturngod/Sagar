@@ -245,6 +245,7 @@ export const th: Record<string, string> = {
   "Add provider": "เพิ่มผู้ให้บริการ",
   "Live list": "รายการล่าสุด",
   "Known list": "รายการที่รู้จัก",
+  "Cached list": "รายการที่บันทึกไว้",
   "No models were listed for this agent.": "ไม่มีรายการโมเดลสำหรับเอเจนต์นี้",
   "No models match your search.": "ไม่มีโมเดลที่ตรงกับการค้นหา",
   "Save settings": "บันทึกการตั้งค่า",
