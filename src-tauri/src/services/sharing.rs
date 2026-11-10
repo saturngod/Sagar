@@ -299,14 +299,40 @@ async fn checked(request: RequestBuilder) -> Result<Response, AppError> {
             "sharing_conflict",
             "The shared item changed or cannot be published. Review it before trying again.",
         )),
-        StatusCode::UNPROCESSABLE_ENTITY => Err(failure(
-            "SagarNet rejected the submitted book or translation. Check the data and size limits.",
+        StatusCode::UNPROCESSABLE_ENTITY | StatusCode::PAYLOAD_TOO_LARGE => Err(AppError::new(
+            "sharing_error",
+            rejection_message(response).await,
         )),
         StatusCode::TOO_MANY_REQUESTS => {
             Err(failure("Too many requests. Wait a moment and try again."))
         }
         _ => Err(failure("SagarNet could not complete this request.")),
     }
+}
+
+/// SagarNet owns content limits, so show its own reason for a rejection:
+/// the first field error, else its message, else a generic line.
+async fn rejection_message(response: Response) -> String {
+    const FALLBACK: &str = "SagarNet rejected the submitted book or translation.";
+    let Ok(body) = response.json::<Value>().await else {
+        return FALLBACK.to_string();
+    };
+    let field_error = body["errors"]
+        .as_object()
+        .and_then(|errors| errors.values().next())
+        .and_then(|value| {
+            value
+                .as_array()
+                .and_then(|list| list.first())
+                .or(Some(value))
+        })
+        .and_then(Value::as_str);
+    field_error
+        .or_else(|| body["message"].as_str())
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(|text| text.chars().take(300).collect())
+        .unwrap_or_else(|| FALLBACK.to_string())
 }
 
 async fn token_request(
@@ -562,29 +588,9 @@ async fn access(
     }
 }
 
-/// SagarNet's limit for chapter HTML, including its inline base64 image.
-const MAX_SHARED_HTML_BYTES: usize = 1_048_576;
-/// SagarNet keeps one inline image per chapter.
-const MAX_SHARED_IMAGES: usize = 1;
-/// SagarNet drops images wider or taller than this.
-const MAX_SHARED_IMAGE_SIDE: u32 = 4096;
-
-fn sharing_error(message: String) -> AppError {
-    AppError::new("sharing_error", message)
-}
-
-fn too_many_images(count: usize) -> AppError {
-    sharing_error(format!(
-        "This chapter has {count} images. SagarNet accepts one image per chapter, so remove the others before sharing."
-    ))
-}
-
-fn megabytes(bytes: usize) -> String {
-    format!("{:.1} MB", bytes as f64 / 1_048_576.0)
-}
-
-/// Checks chapter HTML against what SagarNet keeps: formatting plus at most
-/// one inline JPEG, PNG, GIF or WebP image, 1 MB in all.
+/// Checks that chapter HTML uses only what SagarNet understands: formatting
+/// plus inline JPEG, PNG, GIF or WebP images. Count and size limits are
+/// SagarNet's to enforce; it rejects the upload when they are exceeded.
 fn validated_sharing_html(fragment: &str) -> Result<(String, String), AppError> {
     let (html, plain) = rich_text::validate_document(fragment)?;
     let wrapped = format!("<w>{html}</w>");
@@ -610,23 +616,14 @@ fn validated_sharing_html(fragment: &str) -> Result<(String, String), AppError> 
             ));
         }
     }
-    if images.len() > MAX_SHARED_IMAGES {
-        return Err(too_many_images(images.len()));
-    }
     for source in images {
         shared_image(source)?;
-    }
-    if html.len() > MAX_SHARED_HTML_BYTES {
-        return Err(sharing_error(format!(
-            "This chapter is {}. SagarNet accepts chapters up to 1 MB, including the image. Use a smaller image or split the chapter.",
-            megabytes(html.len())
-        )));
     }
     Ok((html, plain))
 }
 
 fn shared_image(source: &str) -> Result<(), AppError> {
-    let (mime, bytes) = rich_text::image_bytes(source)
+    let (mime, _) = rich_text::image_bytes(source)
         .map_err(|_| failure("SagarNet chapter images must be JPEG, PNG, GIF or WebP files."))?;
     if !matches!(
         mime,
@@ -636,72 +633,7 @@ fn shared_image(source: &str) -> Result<(), AppError> {
             "SagarNet chapter images must be JPEG, PNG, GIF or WebP files.",
         ));
     }
-    match image_size(&bytes) {
-        Some((width, height))
-            if (1..=MAX_SHARED_IMAGE_SIDE).contains(&width)
-                && (1..=MAX_SHARED_IMAGE_SIDE).contains(&height) =>
-        {
-            Ok(())
-        }
-        Some((width, height)) => Err(sharing_error(format!(
-            "The chapter image is {width} × {height} pixels. SagarNet accepts images up to 4,096 pixels on each side."
-        ))),
-        None => Err(failure("Sagar could not read the chapter image’s size.")),
-    }
-}
-
-/// Reads pixel dimensions from a JPEG, PNG, GIF or WebP header.
-fn image_size(bytes: &[u8]) -> Option<(u32, u32)> {
-    let take = |at: usize, len: usize| bytes.get(at..at + len);
-    let be16 = |at| take(at, 2).map(|b| u32::from(u16::from_be_bytes([b[0], b[1]])));
-    let le16 = |at| take(at, 2).map(|b| u32::from(u16::from_le_bytes([b[0], b[1]])));
-    let le24 = |at| take(at, 3).map(|b| u32::from_le_bytes([b[0], b[1], b[2], 0]));
-    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") && take(12, 4) == Some(b"IHDR") {
-        let be32 = |at| take(at, 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]));
-        return Some((be32(16)?, be32(20)?));
-    }
-    if bytes.starts_with(b"GIF8") {
-        return Some((le16(6)?, le16(8)?));
-    }
-    if bytes.starts_with(b"\xff\xd8") {
-        let mut at = 2;
-        while at + 4 <= bytes.len() {
-            if bytes[at] != 0xff {
-                return None;
-            }
-            let marker = bytes[at + 1];
-            if marker == 0xff {
-                at += 1;
-                continue;
-            }
-            if matches!(marker, 0x01 | 0xd0..=0xd8) {
-                at += 2;
-                continue;
-            }
-            let length = be16(at + 2)? as usize;
-            if length < 2 {
-                return None;
-            }
-            if (0xc0..=0xcf).contains(&marker) && !matches!(marker, 0xc4 | 0xc8 | 0xcc) {
-                return Some((be16(at + 7)?, be16(at + 5)?));
-            }
-            at += 2 + length;
-        }
-        return None;
-    }
-    if bytes.starts_with(b"RIFF") && take(8, 4) == Some(b"WEBP") {
-        return match take(12, 4)? {
-            b"VP8 " => Some((le16(26)? & 0x3fff, le16(28)? & 0x3fff)),
-            b"VP8L" => {
-                let b = take(21, 4)?;
-                let bits = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
-                Some(((bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1))
-            }
-            b"VP8X" => Some((le24(24)? + 1, le24(27)? + 1)),
-            _ => None,
-        };
-    }
-    None
+    Ok(())
 }
 
 fn escape_attribute(value: &str) -> String {
@@ -734,13 +666,6 @@ fn inline_book_images(
     if linked.is_empty() {
         return Ok(html.to_string());
     }
-    let total = document
-        .descendants()
-        .filter(|node| node.has_tag_name("img"))
-        .count();
-    if total > MAX_SHARED_IMAGES {
-        return Err(too_many_images(total));
-    }
     let mut archive = SafeArchive::open(&snapshot()?, &ArchiveLimits::default())?;
     let mut output = wrapped.clone();
     for node in linked.iter().rev() {
@@ -753,12 +678,6 @@ fn inline_book_images(
         let bytes = archive
             .read_entry(&crate::epub::resolve_href(chapter_href, src))
             .map_err(|_| failure("A chapter image is missing from this book."))?;
-        if bytes.len() > MAX_SHARED_HTML_BYTES {
-            return Err(sharing_error(format!(
-                "The chapter image is {}. SagarNet accepts chapters up to 1 MB, including the image. Use a smaller image.",
-                megabytes(bytes.len())
-            )));
-        }
         let mime = rich_text::image_mime_from_bytes(&bytes)
             .filter(|mime| {
                 matches!(
@@ -1420,61 +1339,47 @@ mod tests {
         )
     }
 
+    #[tokio::test]
+    async fn shows_sagarnet_rejection_reason() {
+        let reply = |body: &str| {
+            Response::from(
+                axum::http::Response::builder()
+                    .status(422)
+                    .body(body.to_string())
+                    .expect("response"),
+            )
+        };
+        let fields = r#"{"message":"Invalid.","errors":{"content":["The content may contain at most one image."]}}"#;
+        assert_eq!(
+            rejection_message(reply(fields)).await,
+            "The content may contain at most one image."
+        );
+        assert_eq!(
+            rejection_message(reply(r#"{"message":"Too large."}"#)).await,
+            "Too large."
+        );
+        assert!(
+            rejection_message(reply("oops"))
+                .await
+                .starts_with("SagarNet rejected")
+        );
+    }
+
     #[test]
-    fn sharing_html_allows_one_inline_image_within_limits() {
+    fn sharing_html_leaves_image_limits_to_the_server() {
         let one = format!(
             r#"<p>စာ</p><p><img src="{}" alt="Map"/></p>"#,
             data_url(&png(40, 30, 0))
         );
         assert!(validated_sharing_html(&one).is_ok());
-
-        let two = format!("{one}{one}");
-        let error = validated_sharing_html(&two).expect_err("two images");
-        assert!(error.message.contains("2 images"), "{}", error.message);
-
+        assert!(validated_sharing_html(&format!("{one}{one}")).is_ok());
         let wide = format!(
             r#"<p><img src="{}" alt=""/></p>"#,
             data_url(&png(5000, 10, 0))
         );
-        assert!(
-            validated_sharing_html(&wide)
-                .expect_err("too wide")
-                .message
-                .contains("4,096")
-        );
-
-        let large = format!(
-            r#"<p><img src="{}" alt=""/></p>"#,
-            data_url(&png(10, 10, 800_000))
-        );
-        assert!(
-            validated_sharing_html(&large)
-                .expect_err("over 1 MB")
-                .message
-                .contains("1 MB")
-        );
-
+        assert!(validated_sharing_html(&wide).is_ok());
         let text = format!("<p>{}</p>", "က".repeat(400_000));
-        assert!(
-            validated_sharing_html(&text)
-                .expect_err("text over 1 MB")
-                .message
-                .contains("1 MB")
-        );
-    }
-
-    #[test]
-    fn reads_image_sizes_from_headers() {
-        assert_eq!(image_size(&png(640, 480, 0)), Some((640, 480)));
-        assert_eq!(image_size(b"GIF89a\x20\x03\x58\x02"), Some((800, 600)));
-        let jpeg = [
-            0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, 0x01, 0xe0, 0x02, 0x80,
-        ];
-        assert_eq!(image_size(&jpeg), Some((640, 480)));
-        let mut webp = b"RIFF\0\0\0\0WEBPVP8X\x0a\0\0\0\0\0\0\0".to_vec();
-        webp.extend([0x7f, 0x02, 0x00, 0xdf, 0x01, 0x00]);
-        assert_eq!(image_size(&webp), Some((640, 480)));
-        assert_eq!(image_size(b"not an image"), None);
+        assert!(validated_sharing_html(&text).is_ok());
     }
 
     #[test]
@@ -1505,7 +1410,9 @@ mod tests {
         assert!(inline_book_images(missing, "OEBPS/ch1.xhtml", || Ok(snapshot.clone())).is_err());
         let two =
             r#"<p><img src="images/lady.png" alt=""/><img src="images/lady.png" alt=""/></p>"#;
-        assert!(inline_book_images(two, "OEBPS/ch1.xhtml", || panic!("not opened")).is_err());
+        let inlined =
+            inline_book_images(two, "OEBPS/ch1.xhtml", || Ok(snapshot.clone())).expect("two");
+        assert_eq!(inlined.matches("data:image/png;base64,").count(), 2);
     }
 
     #[test]
