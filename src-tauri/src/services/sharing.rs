@@ -562,25 +562,222 @@ async fn access(
     }
 }
 
+/// SagarNet's limit for chapter HTML, including its inline base64 image.
+const MAX_SHARED_HTML_BYTES: usize = 1_048_576;
+/// SagarNet keeps one inline image per chapter.
+const MAX_SHARED_IMAGES: usize = 1;
+/// SagarNet drops images wider or taller than this.
+const MAX_SHARED_IMAGE_SIDE: u32 = 4096;
+
+fn sharing_error(message: String) -> AppError {
+    AppError::new("sharing_error", message)
+}
+
+fn too_many_images(count: usize) -> AppError {
+    sharing_error(format!(
+        "This chapter has {count} images. SagarNet accepts one image per chapter, so remove the others before sharing."
+    ))
+}
+
+fn megabytes(bytes: usize) -> String {
+    format!("{:.1} MB", bytes as f64 / 1_048_576.0)
+}
+
+/// Checks chapter HTML against what SagarNet keeps: formatting plus at most
+/// one inline JPEG, PNG, GIF or WebP image, 1 MB in all.
 fn validated_sharing_html(fragment: &str) -> Result<(String, String), AppError> {
     let (html, plain) = rich_text::validate_document(fragment)?;
     let wrapped = format!("<w>{html}</w>");
     let document = roxmltree::Document::parse(&wrapped)
         .map_err(|_| failure("The chapter could not be read as shareable HTML."))?;
-    if document
-        .descendants()
-        .filter(|node| node.is_element())
-        .any(|node| {
-            node.attributes()
+    let mut images = Vec::new();
+    for node in document.descendants().filter(|node| node.is_element()) {
+        let name = node.tag_name().name();
+        if name == "img" {
+            if node.attribute("srcset").is_some() {
+                return Err(failure(
+                    "SagarNet chapter images need a single picture. Remove the image’s alternate sizes.",
+                ));
+            }
+            images.push(node.attribute("src").unwrap_or(""));
+        } else if matches!(name, "image" | "source" | "picture")
+            || node
+                .attributes()
                 .any(|attribute| matches!(attribute.name(), "src" | "srcset"))
-                || node.has_tag_name(("http://www.w3.org/2000/svg", "image"))
-        })
-    {
-        return Err(failure(
-            "SagarNet chapter HTML cannot include images or embedded book resources.",
-        ));
+        {
+            return Err(failure(
+                "SagarNet chapter HTML can include a picture, but not SVG, responsive or embedded media.",
+            ));
+        }
+    }
+    if images.len() > MAX_SHARED_IMAGES {
+        return Err(too_many_images(images.len()));
+    }
+    for source in images {
+        shared_image(source)?;
+    }
+    if html.len() > MAX_SHARED_HTML_BYTES {
+        return Err(sharing_error(format!(
+            "This chapter is {}. SagarNet accepts chapters up to 1 MB, including the image. Use a smaller image or split the chapter.",
+            megabytes(html.len())
+        )));
     }
     Ok((html, plain))
+}
+
+fn shared_image(source: &str) -> Result<(), AppError> {
+    let (mime, bytes) = rich_text::image_bytes(source)
+        .map_err(|_| failure("SagarNet chapter images must be JPEG, PNG, GIF or WebP files."))?;
+    if !matches!(
+        mime,
+        "image/jpeg" | "image/png" | "image/gif" | "image/webp"
+    ) {
+        return Err(failure(
+            "SagarNet chapter images must be JPEG, PNG, GIF or WebP files.",
+        ));
+    }
+    match image_size(&bytes) {
+        Some((width, height))
+            if (1..=MAX_SHARED_IMAGE_SIDE).contains(&width)
+                && (1..=MAX_SHARED_IMAGE_SIDE).contains(&height) =>
+        {
+            Ok(())
+        }
+        Some((width, height)) => Err(sharing_error(format!(
+            "The chapter image is {width} × {height} pixels. SagarNet accepts images up to 4,096 pixels on each side."
+        ))),
+        None => Err(failure("Sagar could not read the chapter image’s size.")),
+    }
+}
+
+/// Reads pixel dimensions from a JPEG, PNG, GIF or WebP header.
+fn image_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    let take = |at: usize, len: usize| bytes.get(at..at + len);
+    let be16 = |at| take(at, 2).map(|b| u32::from(u16::from_be_bytes([b[0], b[1]])));
+    let le16 = |at| take(at, 2).map(|b| u32::from(u16::from_le_bytes([b[0], b[1]])));
+    let le24 = |at| take(at, 3).map(|b| u32::from_le_bytes([b[0], b[1], b[2], 0]));
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") && take(12, 4) == Some(b"IHDR") {
+        let be32 = |at| take(at, 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]));
+        return Some((be32(16)?, be32(20)?));
+    }
+    if bytes.starts_with(b"GIF8") {
+        return Some((le16(6)?, le16(8)?));
+    }
+    if bytes.starts_with(b"\xff\xd8") {
+        let mut at = 2;
+        while at + 4 <= bytes.len() {
+            if bytes[at] != 0xff {
+                return None;
+            }
+            let marker = bytes[at + 1];
+            if marker == 0xff {
+                at += 1;
+                continue;
+            }
+            if matches!(marker, 0x01 | 0xd0..=0xd8) {
+                at += 2;
+                continue;
+            }
+            let length = be16(at + 2)? as usize;
+            if length < 2 {
+                return None;
+            }
+            if (0xc0..=0xcf).contains(&marker) && !matches!(marker, 0xc4 | 0xc8 | 0xcc) {
+                return Some((be16(at + 7)?, be16(at + 5)?));
+            }
+            at += 2 + length;
+        }
+        return None;
+    }
+    if bytes.starts_with(b"RIFF") && take(8, 4) == Some(b"WEBP") {
+        return match take(12, 4)? {
+            b"VP8 " => Some((le16(26)? & 0x3fff, le16(28)? & 0x3fff)),
+            b"VP8L" => {
+                let b = take(21, 4)?;
+                let bits = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
+                Some(((bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1))
+            }
+            b"VP8X" => Some((le24(24)? + 1, le24(27)? + 1)),
+            _ => None,
+        };
+    }
+    None
+}
+
+fn escape_attribute(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('"', "&quot;")
+}
+
+/// Replaces `<img>` tags that point at the book's own files with inline
+/// `data:` images read from the immutable snapshot, keeping only `src` and
+/// `alt` (all SagarNet keeps). The local draft is unchanged.
+fn inline_book_images(
+    html: &str,
+    chapter_href: &str,
+    snapshot: impl FnOnce() -> Result<std::path::PathBuf, AppError>,
+) -> Result<String, AppError> {
+    let wrapped = format!("<w>{html}</w>");
+    let document = roxmltree::Document::parse(&wrapped)
+        .map_err(|_| failure("The chapter could not be read as shareable HTML."))?;
+    let linked: Vec<_> = document
+        .descendants()
+        .filter(|node| node.has_tag_name("img"))
+        .filter(|node| {
+            !node
+                .attribute("src")
+                .is_some_and(|src| src.trim_start().starts_with("data:"))
+        })
+        .collect();
+    if linked.is_empty() {
+        return Ok(html.to_string());
+    }
+    let total = document
+        .descendants()
+        .filter(|node| node.has_tag_name("img"))
+        .count();
+    if total > MAX_SHARED_IMAGES {
+        return Err(too_many_images(total));
+    }
+    let mut archive = SafeArchive::open(&snapshot()?, &ArchiveLimits::default())?;
+    let mut output = wrapped.clone();
+    for node in linked.iter().rev() {
+        let src = node.attribute("src").unwrap_or("").trim();
+        if src.is_empty() || src.contains(':') || src.starts_with('/') || src.starts_with('\\') {
+            return Err(failure(
+                "SagarNet can only include images stored in this book. Replace the linked image before sharing.",
+            ));
+        }
+        let bytes = archive
+            .read_entry(&crate::epub::resolve_href(chapter_href, src))
+            .map_err(|_| failure("A chapter image is missing from this book."))?;
+        if bytes.len() > MAX_SHARED_HTML_BYTES {
+            return Err(sharing_error(format!(
+                "The chapter image is {}. SagarNet accepts chapters up to 1 MB, including the image. Use a smaller image.",
+                megabytes(bytes.len())
+            )));
+        }
+        let mime = rich_text::image_mime_from_bytes(&bytes)
+            .filter(|mime| {
+                matches!(
+                    *mime,
+                    "image/jpeg" | "image/png" | "image/gif" | "image/webp"
+                )
+            })
+            .ok_or_else(|| {
+                failure("SagarNet chapter images must be JPEG, PNG, GIF or WebP files.")
+            })?;
+        let alt = node.attribute("alt").unwrap_or("");
+        let tag = format!(
+            "<img src=\"data:{mime};base64,{}\" alt=\"{}\"/>",
+            base64::engine::general_purpose::STANDARD.encode(&bytes),
+            escape_attribute(alt)
+        );
+        output.replace_range(node.range(), &tag);
+    }
+    Ok(output["<w>".len()..output.len() - "</w>".len()].to_string())
 }
 
 fn translation_html(
@@ -589,19 +786,32 @@ fn translation_html(
     local_chapter: &str,
 ) -> Result<Option<(String, i64)>, AppError> {
     let conn = workspace::open_db(data_dir)?;
-    let belongs: bool = conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM chapters WHERE id = ?1 AND project_id = ?2)",
-        [local_chapter, project],
-        |row| row.get(0),
-    )?;
-    if !belongs {
+    let chapter_href: Option<String> = conn
+        .query_row(
+            "SELECT resource_href FROM chapters WHERE id = ?1 AND project_id = ?2",
+            [local_chapter, project],
+            |row| row.get(0),
+        )
+        .map(Some)
+        .or_else(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            error => Err(error),
+        })?;
+    let Some(chapter_href) = chapter_href else {
         return Err(failure(
             "This chapter does not belong to the selected book.",
         ));
-    }
+    };
     let draft = crate::storage::documents::load(&conn, local_chapter)?;
-    let (html, plain) = validated_sharing_html(draft.html.as_deref().unwrap_or(""))?;
-    Ok((!plain.trim().is_empty()).then_some((html, draft.revision)))
+    let (html, plain) = rich_text::validate_document(draft.html.as_deref().unwrap_or(""))?;
+    if plain.trim().is_empty() {
+        return Ok(None);
+    }
+    let html = inline_book_images(&html, &chapter_href, || {
+        workspace::snapshot_path(data_dir, project)
+    })?;
+    let (html, _) = validated_sharing_html(&html)?;
+    Ok(Some((html, draft.revision)))
 }
 
 fn sharing_language(value: &str) -> Result<String, AppError> {
@@ -971,17 +1181,24 @@ pub async fn request(
             let expected_language = language.clone();
             let content = local_work(move || {
                 let (content, revision) = translation_html(&data_dir, &project, &local_chapter)?
-                    .ok_or_else(|| failure("Write and save a translation before submitting this chapter."))?;
+                    .ok_or_else(|| {
+                        failure("Write and save a translation before submitting this chapter.")
+                    })?;
                 if revision != local_revision {
                     return Err(failure(
                         "The local translation changed. Preview it again before sharing.",
                     ));
                 }
-                if !projects::get_project(&data_dir, &project)?.target_language.eq_ignore_ascii_case(&expected_language) {
-                    return Err(failure("The book’s target language changed. Reopen Submit translations."));
+                if !projects::get_project(&data_dir, &project)?
+                    .target_language
+                    .eq_ignore_ascii_case(&expected_language)
+                {
+                    return Err(failure(
+                        "The book’s target language changed. Reopen Submit translations.",
+                    ));
                 }
-                if content.chars().count() > 250_000 || content.contains('\0') {
-                    return Err(failure("A translation must contain at most 250,000 characters and no null characters."));
+                if content.contains('\0') {
+                    return Err(failure("A translation must not contain null characters."));
                 }
                 Ok(content)
             })
@@ -1185,6 +1402,110 @@ mod tests {
         );
         assert!(validated_sharing_html(r#"<p>Text<img src="cover.png" /></p>"#).is_err());
         assert!(validated_sharing_html("<p onclick='alert(1)'>Text</p>").is_err());
+    }
+
+    fn png(width: u32, height: u32, padding: usize) -> Vec<u8> {
+        let mut bytes = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+        bytes.extend(width.to_be_bytes());
+        bytes.extend(height.to_be_bytes());
+        bytes.extend([8, 6, 0, 0, 0]);
+        bytes.resize(bytes.len() + padding, 0);
+        bytes
+    }
+
+    fn data_url(bytes: &[u8]) -> String {
+        format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        )
+    }
+
+    #[test]
+    fn sharing_html_allows_one_inline_image_within_limits() {
+        let one = format!(
+            r#"<p>စာ</p><p><img src="{}" alt="Map"/></p>"#,
+            data_url(&png(40, 30, 0))
+        );
+        assert!(validated_sharing_html(&one).is_ok());
+
+        let two = format!("{one}{one}");
+        let error = validated_sharing_html(&two).expect_err("two images");
+        assert!(error.message.contains("2 images"), "{}", error.message);
+
+        let wide = format!(
+            r#"<p><img src="{}" alt=""/></p>"#,
+            data_url(&png(5000, 10, 0))
+        );
+        assert!(
+            validated_sharing_html(&wide)
+                .expect_err("too wide")
+                .message
+                .contains("4,096")
+        );
+
+        let large = format!(
+            r#"<p><img src="{}" alt=""/></p>"#,
+            data_url(&png(10, 10, 800_000))
+        );
+        assert!(
+            validated_sharing_html(&large)
+                .expect_err("over 1 MB")
+                .message
+                .contains("1 MB")
+        );
+
+        let text = format!("<p>{}</p>", "က".repeat(400_000));
+        assert!(
+            validated_sharing_html(&text)
+                .expect_err("text over 1 MB")
+                .message
+                .contains("1 MB")
+        );
+    }
+
+    #[test]
+    fn reads_image_sizes_from_headers() {
+        assert_eq!(image_size(&png(640, 480, 0)), Some((640, 480)));
+        assert_eq!(image_size(b"GIF89a\x20\x03\x58\x02"), Some((800, 600)));
+        let jpeg = [
+            0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, 0x01, 0xe0, 0x02, 0x80,
+        ];
+        assert_eq!(image_size(&jpeg), Some((640, 480)));
+        let mut webp = b"RIFF\0\0\0\0WEBPVP8X\x0a\0\0\0\0\0\0\0".to_vec();
+        webp.extend([0x7f, 0x02, 0x00, 0xdf, 0x01, 0x00]);
+        assert_eq!(image_size(&webp), Some((640, 480)));
+        assert_eq!(image_size(b"not an image"), None);
+    }
+
+    #[test]
+    fn inlines_book_images_from_the_snapshot() {
+        let directory = tempfile::tempdir().expect("fixture directory");
+        let snapshot = directory.path().join("source.epub");
+        let mut zip = ZipWriter::new(std::fs::File::create(&snapshot).expect("fixture file"));
+        let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).expect("mimetype");
+        zip.write_all(b"application/epub+zip").expect("mimetype");
+        zip.start_file("OEBPS/images/lady.png", stored)
+            .expect("image");
+        zip.write_all(&png(400, 300, 0)).expect("image");
+        zip.finish().expect("fixture archive");
+
+        let html =
+            r#"<p>စာ</p><p><img src="images/lady.png" alt="A &quot;lady&quot;" width="400"/></p>"#;
+        let inlined =
+            inline_book_images(html, "OEBPS/ch1.xhtml", || Ok(snapshot.clone())).expect("inlined");
+        assert!(inlined.starts_with("<p>စာ</p><p><img src=\"data:image/png;base64,"));
+        assert!(
+            inlined.ends_with(r#"alt="A &quot;lady&quot;"/></p>"#),
+            "{inlined}"
+        );
+        assert!(validated_sharing_html(&inlined).is_ok());
+
+        let missing = r#"<p><img src="images/gone.png" alt=""/></p>"#;
+        assert!(inline_book_images(missing, "OEBPS/ch1.xhtml", || Ok(snapshot.clone())).is_err());
+        let two =
+            r#"<p><img src="images/lady.png" alt=""/><img src="images/lady.png" alt=""/></p>"#;
+        assert!(inline_book_images(two, "OEBPS/ch1.xhtml", || panic!("not opened")).is_err());
     }
 
     #[test]

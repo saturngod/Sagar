@@ -22,6 +22,33 @@ const containers = [
 ];
 const blockSelector =
   "p,h1,h2,h3,h4,h5,h6,ul,ol,li,blockquote,hr,table,div,section,hgroup,article,main,header,footer,aside,figure,figcaption,pre,dl,dt,dd,svg,picture,img";
+/**
+ * Gutenberg-style figures put an image beside a loose caption, e.g.
+ * `<div><img/><span class="caption">…</span></div>`. Block-only containers
+ * would wrap that caption in a new paragraph, so keep such containers as
+ * inline text with the images inline instead. An image-only container stays
+ * a block container.
+ */
+function mixesImagesWithInline(element: Element): boolean {
+  const children = Array.from(element.children);
+  const isImage = (child: Element) => child.matches("img[src]");
+  return (
+    children.some(isImage) &&
+    children.every((child) => isImage(child) || !child.matches(blockSelector)) &&
+    (children.some((child) => !isImage(child)) ||
+      Array.from(element.childNodes).some(
+        (node) =>
+          node.nodeType === globalThis.Node.TEXT_NODE &&
+          (node.textContent ?? "").trim() !== "",
+      ))
+  );
+}
+function hasBlockChildren(element: Element): boolean {
+  return (
+    !mixesImagesWithInline(element) &&
+    Array.from(element.children).some((child) => child.matches(blockSelector))
+  );
+}
 const inline = [
   "time",
   "span",
@@ -193,12 +220,15 @@ export function createBookStructure(imageBase = "") {
         {
           tag: "img[src]",
           priority: 120,
-          getAttrs: (element) =>
-            element.parentElement?.closest(
+          getAttrs: (element) => {
+            const parent = element.parentElement;
+            return parent?.closest(
               "p,h1,h2,h3,h4,h5,h6,span,a,pre,dt,sup,sub,ruby,rt,rp",
-            )
+            ) ||
+              (parent?.matches(containers.join(",")) && mixesImagesWithInline(parent))
               ? {}
-              : false,
+              : false;
+          },
         },
       ],
     }).configure({ inline: true, allowBase64: true }),
@@ -246,10 +276,7 @@ export function createBookStructure(imageBase = "") {
           {
             tag,
             priority: 110,
-            getAttrs: (element) =>
-              Array.from(element.children).some((child) => child.matches(blockSelector))
-                ? {}
-                : false,
+            getAttrs: (element) => (hasBlockChildren(element) ? {} : false),
           },
         ],
         renderHTML: ({ HTMLAttributes }) => [tag, HTMLAttributes, 0],
@@ -265,10 +292,7 @@ export function createBookStructure(imageBase = "") {
           {
             tag,
             priority: 111,
-            getAttrs: (element) =>
-              Array.from(element.children).some((child) => child.matches(blockSelector))
-                ? false
-                : {},
+            getAttrs: (element) => (hasBlockChildren(element) ? false : {}),
           },
         ],
         renderHTML: ({ HTMLAttributes }) => [tag, HTMLAttributes, 0],

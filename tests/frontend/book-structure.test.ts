@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { DOMParser as ProseMirrorParser, DOMSerializer } from "@tiptap/pm/model";
 import Image from "@tiptap/extension-image";
 import { Table, TableRow } from "@tiptap/extension-table";
 import {
@@ -471,4 +472,36 @@ test("highlighted code metadata survives Rich conversion, editing and reload", a
   } finally {
     editor.destroy();
   }
+});
+
+test("figure div with an image and loose caption survives HTML → Rich, typing and reload", async () => {
+  const source = await Bun.file(new URL("../fixtures/editor/figure-caption.xhtml", import.meta.url)).text();
+  const normalized = normalizeRichDocument(source);
+  // Mirrors TargetPane's HTML → Rich preservation check.
+  const editor = createEditor("<p></p>");
+  try {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = normalized;
+    const parsed = ProseMirrorParser.fromSchema(editor.schema).parse(wrapper, { preserveWhitespace: true });
+    const roundTrip = document.createElement("div");
+    roundTrip.append(DOMSerializer.fromSchema(editor.schema).serializeFragment(parsed.content));
+    expect(comparableDocument(roundTrip.innerHTML)).toBe(comparableDocument(normalized));
+    editor.commands.setContent(parsed.toJSON(), { emitUpdate: false });
+    const saved = documentFragment(editor.getHTML());
+    expect(saved).not.toContain("<p><span");
+    expect(saved).toContain('<span class="caption" id="caption1">');
+    expect(saved).toContain('<div class="figcenter"><img alt="Only image" src="images/only.jpg"/></div>');
+    // Typing in the caption keeps the figure and its image intact.
+    let captionPos = -1;
+    editor.state.doc.descendants((node, pos) => {
+      if (node.isText && node.text?.startsWith("မြန်မာအမျိုးသမီး")) captionPos = pos;
+    });
+    expect(captionPos).toBeGreaterThan(0);
+    editor.commands.insertContentAt(captionPos, "ပုံ ");
+    const edited = documentFragment(editor.getHTML());
+    expect(edited).toContain('id="caption1">ပုံ မြန်မာအမျိုးသမီး');
+    expect(edited).toContain('src="images/lady.jpg"');
+    editor.commands.setContent(edited, { parseOptions: { preserveWhitespace: true } });
+    expect(comparableDocument(editor.getHTML())).toBe(comparableDocument(edited));
+  } finally { editor.destroy(); }
 });
