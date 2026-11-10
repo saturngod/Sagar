@@ -1,5 +1,30 @@
 # Plan.md — EPUB Translation Studio
 
+### SagarNet submission and discovery — 2026-11-09
+
+The workspace exposes Submit translations and Get translations for the open
+book. Submit checks the saved OAuth session, matches the source edition, and
+prefills catalog metadata when the edition is missing. After confirmation it
+submits only the current chapter’s saved HTML in the book’s target language,
+using server revisions for updates. The server must advertise HTML format
+version 2 before the desktop sends the chapter. Get translations loads catalog chapters and filters contributor
+versions by the selected language tag. No milestone checkboxes advanced.
+
+The SagarNet server and OAuth Client ID now come from `src-tauri/sagarnet.json`
+(release `server`, debug-only `dev_server`, `client_id`). The `SAGARNET_URL` and
+`SAGARNET_CLIENT_ID` build environment variables override it. The frontend no
+longer sends or edits them. Upload and Download dialogs are numbered steps
+(sign in → find book → upload chapter; choose book → chapter and language →
+pick translation). Release builds with an empty `server` show that sharing is
+not set up.
+
+Validation included the Rust suite, frontend lint/build, and three mocked
+sharing dialog tests. The combined frontend suite also reports the existing
+provider settings and content server test failures when the new tests are
+excluded. Next unfinished task is a native smoke test against a configured
+SagarNet instance, including OAuth recovery and public browsing from a second
+account.
+
 ### Linux and Windows ARM64 release targets — 2026-11-06
 
 Milestone 5 release follow-up: the tag-triggered release matrix now includes

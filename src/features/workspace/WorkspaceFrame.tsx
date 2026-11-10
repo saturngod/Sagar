@@ -25,12 +25,19 @@ import { ChapterSidebar } from "../chapters/ChapterSidebar";
 import { ExportDialog } from "../export/ExportDialog";
 import { SourcePane } from "../reader/SourcePane";
 import { AiBackgroundBar } from "../translator/AiBackgroundBar";
+import { plainFragment } from "../translator/richText";
 import { TargetPane } from "../translator/TargetPane";
 import { useChapterEditor } from "../translator/useChapterEditor";
 import { BookSettingsDialog } from "./BookSettingsDialog";
 import { LanguageDialog } from "./LanguageDialog";
 import { PaneVisibilityMenu } from "./PaneVisibilityMenu";
 import { ReadingControls } from "./ReadingControls";
+import {
+  type Discovery,
+  matchOpenedProject,
+  SharingDialog,
+  type SharingMode,
+} from "./SharingDialog";
 import { useSyncedScroll } from "./useSyncedScroll";
 
 type ProjectState =
@@ -86,6 +93,23 @@ export function WorkspaceFrame({
   const [exportOutcome, setExportOutcome] = useState<ExportOutcome | null>(null);
   const [langOpen, setLangOpen] = useState(false);
   const [bookSettingsOpen, setBookSettingsOpen] = useState(false);
+  const [sharingOpen, setSharingOpen] = useState<SharingMode | null>(null);
+  const [sharingMatch, setSharingMatch] = useState<Discovery | null>(null);
+  const [sharingResult, setSharingResult] = useState<string | null>(null);
+  useEffect(() => {
+    let current = true;
+    setSharingMatch(null);
+    void matchOpenedProject(projectId)
+      .then((result) => {
+        if (current) setSharingMatch(result);
+      })
+      .catch(() => {
+        // Discovery is optional. Local work remains available when offline.
+      });
+    return () => {
+      current = false;
+    };
+  }, [projectId]);
   const [aiChapterId, setAiChapterId] = useState<string | null>(null);
   const readingRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -437,6 +461,30 @@ export function WorkspaceFrame({
         >
           <Icon name="settings" />
         </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Upload to SagarNet"
+          title={
+            sharingMatch?.match.exact.length
+              ? "Upload to SagarNet · this book is on SagarNet"
+              : "Upload to SagarNet"
+          }
+          disabled={!project}
+          onClick={() => setSharingOpen("submit")}
+        >
+          <Icon name="cloudUpload" />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Download from SagarNet"
+          title="Download from SagarNet"
+          disabled={!project}
+          onClick={() => setSharingOpen("browse")}
+        >
+          <Icon name="cloudDownload" />
+        </button>
         <PaneVisibilityMenu visible={visiblePanes} onToggle={togglePaneVisibility} />
       </header>
 
@@ -652,6 +700,38 @@ export function WorkspaceFrame({
           }
         />
       ) : null}
+      {sharingOpen && project ? (
+        <SharingDialog
+          mode={sharingOpen}
+          project={project}
+          chapters={chapters}
+          activeChapterId={activeChapterId}
+          initialMatch={sharingMatch}
+          onClose={() => setSharingOpen(null)}
+          onComplete={(message) => {
+            setSharingOpen(null);
+            setSharingResult(message);
+          }}
+          onFlush={editor.flushAll}
+          onApply={async ({ content, content_format_version }) => {
+            if (
+              !(await editor.flushAll()) ||
+              editor.draft?.chapterId !== activeChapterId ||
+              editor.appending
+            )
+              return false;
+            editor.setHtml(
+              content_format_version === 2
+                ? content
+                : content
+                    .split(/\n{2,}/)
+                    .map((paragraph) => `<p>${plainFragment(paragraph)}</p>`)
+                    .join(""),
+            );
+            return editor.flushAll();
+          }}
+        />
+      ) : null}
       {exportOpen && project ? (
         <ExportDialog
           project={project}
@@ -663,12 +743,73 @@ export function WorkspaceFrame({
           }}
         />
       ) : null}
+      {sharingResult ? (
+        <SharingResultPanel
+          message={sharingResult}
+          onDismiss={() => setSharingResult(null)}
+        />
+      ) : null}
       {exportOutcome ? (
         <ExportOutcomePanel
           outcome={exportOutcome}
           onDismiss={() => setExportOutcome(null)}
         />
       ) : null}
+    </div>
+  );
+}
+
+function SharingResultPanel({
+  message,
+  onDismiss,
+}: {
+  message: string;
+  onDismiss: () => void;
+}) {
+  const { t } = useTranslation();
+  const done = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    done.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onDismiss();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onDismiss]);
+  return (
+    <div className="dialog-backdrop">
+      <div
+        className="dialog dialog--compact"
+        role="alertdialog"
+        aria-labelledby="sagarnet-result-heading"
+      >
+        <div className="panel__header">
+          <h2 id="sagarnet-result-heading" className="panel__heading">
+            SagarNet
+          </h2>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={t("Close")}
+            title={t("Close")}
+            onClick={onDismiss}
+          >
+            <Icon name="close" />
+          </button>
+        </div>
+        <StatusNotice kind="success">{message}</StatusNotice>
+        <div className="button-row sharing-row-end">
+          <button
+            ref={done}
+            type="button"
+            className="btn btn--primary"
+            onClick={onDismiss}
+          >
+            <Icon name="check" />
+            {t("Done")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

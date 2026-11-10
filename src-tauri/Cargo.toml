@@ -35,10 +35,11 @@ sha2 = "0.11.1"
 uuid = { version = "1.28.0", features = ["v4"] }
 chrono = "0.4.45"
 base64 = "0.23.1"
+keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 quick-xml = "0.42.0"
 unicode-segmentation = "1.12"
 # Provider discovery and explicitly consented streaming translation requests.
-reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls", "charset"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "form", "json", "multipart", "query", "rustls", "charset"] }
 
 tokio = { version = "1", features = ["rt", "time", "net", "sync", "fs"] }
 

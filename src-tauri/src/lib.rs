@@ -124,6 +124,7 @@ fn media_type_for(resource: &str) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(services::sharing::SharingSession::default())
         .manage(services::content_server::ContentServer::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -132,6 +133,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::health_check,
+            commands::sharing_sign_in,
+            commands::sharing_cancel_sign_in,
+            commands::sharing_request,
+            commands::sharing_availability,
             commands::start_content_server,
             commands::stop_content_server,
             commands::content_server_status,

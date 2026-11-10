@@ -122,6 +122,21 @@ jobs:
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
+      # sagarnet.json is gitignored and compiled into the app, so write it
+      # from the SAGARNET_CONFIG repository secret before any Rust build.
+      - name: Write SagarNet config
+        shell: bash
+        env:
+          SAGARNET_CONFIG: ${{ secrets.SAGARNET_CONFIG }}
+        run: |
+          if [ -z "$SAGARNET_CONFIG" ]; then
+            echo "::error::SAGARNET_CONFIG secret is not set"
+            exit 1
+          fi
+          printf '%s' "$SAGARNET_CONFIG" > src-tauri/sagarnet.json
+          bun -e 'JSON.parse(await Bun.file("src-tauri/sagarnet.json").text())' \
+            || { echo "::error::SAGARNET_CONFIG is not valid JSON"; exit 1; }
+
       - name: Check Rust formatting
         working-directory: src-tauri
         run: cargo fmt --check

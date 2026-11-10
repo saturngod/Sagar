@@ -501,3 +501,30 @@ pub fn content_server_status(
 ) -> Result<services::content_server::Status, AppError> {
     server.status()
 }
+
+#[tauri::command]
+pub async fn sharing_sign_in(
+    app: AppHandle,
+    state: tauri::State<'_, services::sharing::SharingSession>,
+) -> Result<serde_json::Value, AppError> {
+    services::sharing::sign_in(&app, &state).await
+}
+
+#[tauri::command]
+pub async fn sharing_request(
+    app: AppHandle,
+    state: tauri::State<'_, services::sharing::SharingSession>,
+    operation: services::sharing::Operation,
+) -> Result<serde_json::Value, AppError> {
+    services::sharing::request(app_data_dir(&app)?, &state, operation).await
+}
+
+#[tauri::command]
+pub fn sharing_availability() -> services::sharing::Availability {
+    services::sharing::availability()
+}
+
+#[tauri::command]
+pub fn sharing_cancel_sign_in(state: tauri::State<'_, services::sharing::SharingSession>) {
+    state.cancel_sign_in();
+}

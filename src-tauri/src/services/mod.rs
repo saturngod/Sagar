@@ -12,6 +12,8 @@ pub mod fonts;
 pub mod import;
 mod opencode_stream;
 pub mod projects;
+pub mod sharing;
+
 mod qoder;
 pub mod workspace;
 

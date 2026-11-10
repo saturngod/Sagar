@@ -36,6 +36,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - run: bun install --frozen-lockfile
+      # PR builds use placeholder SagarNet settings; secrets stay in release.yml.
+      - name: Use example SagarNet config
+        shell: bash
+        run: cp src-tauri/sagarnet.example.json src-tauri/sagarnet.json
       - run: bun run check
       - run: bun test tests/frontend
       - run: cargo fmt --check

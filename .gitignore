@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# SagarNet connection config is private. Copy src-tauri/sagarnet.example.json
+# to src-tauri/sagarnet.json locally; the release workflow writes it from the
+# SAGARNET_CONFIG secret.
+src-tauri/sagarnet.json
