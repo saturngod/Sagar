@@ -186,6 +186,23 @@ test("Rich normalization drops empty decoration but preserves anchors, semantics
   }
 });
 
+test("Rich normalization drops bare empty anchors so the chapter round-trips", () => {
+  const input =
+    '<p class="calibre_13">“ပြီးတော့, <a></a>မစ္စတာ ကာ့ရှ်၊ <span class="italic">သင်၏</span> ခန့်မှန်းချက်။”</p>';
+  const cleaned = normalizeRichDocument(input);
+  expect(cleaned).toBe(
+    '<p class="calibre_13">“ပြီးတော့, မစ္စတာ ကာ့ရှ်၊ <span class="italic">သင်၏</span> ခန့်မှန်းချက်။”</p>',
+  );
+  expect(normalizeRichDocument(cleaned)).toBe(cleaned);
+  const editor = createEditor(cleaned);
+  try {
+    expect(comparableDocument(editor.getHTML())).toBe(comparableDocument(cleaned));
+  } finally { editor.destroy(); }
+  for (const retained of ['<a id="p12"></a>', '<a class="x"></a>', '<a href="#n1"></a>', '<a> </a>']) {
+    expect(normalizeRichDocument(`<p>Text ${retained}more</p>`)).toContain(retained);
+  }
+});
+
 test("Rich normalizes mixed book containers, bare lists and plain table cells", () => {
   const examples = [
     '<div>Before <em>မြန်မာ</em><p>Middle</p>After <strong>စာ</strong></div>',

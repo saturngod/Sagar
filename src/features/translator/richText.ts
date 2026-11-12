@@ -279,6 +279,17 @@ export function normalizeRichDocument(html: string): string {
     )
       element.remove();
   }
+  // A bare <a></a> is neither a link (no href, no text) nor a navigation
+  // target (no id); Rich cannot hold it, and dropping it loses nothing.
+  // Any attribute — id, href, class, epub:type — keeps the anchor.
+  for (const anchor of Array.from(doc.body.querySelectorAll("a")).reverse()) {
+    if (
+      anchor.attributes.length === 0 &&
+      anchor.childNodes.length === 0 &&
+      !anchor.closest("pre,svg")
+    )
+      anchor.remove();
+  }
   const blocks =
     "p,h1,h2,h3,h4,h5,h6,ul,ol,li,blockquote,hr,table,thead,tbody,tfoot,tr,td,th,caption,div,section,hgroup,article,main,header,footer,aside,figure,figcaption,pre,dl,dt,dd,svg,picture";
   for (const parent of Array.from(
