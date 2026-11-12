@@ -274,6 +274,7 @@ export const ja: Record<string, string> = {
   "Select source items": "原文の項目を選択",
   "Select all available": "すべて選択",
   "Select untranslated": "未翻訳を選択",
+  "Select untranslated on page": "未翻訳を選択 · ページ",
   "Retry with smaller batches": "バッチを小さくして再試行",
   "Skip and continue": "スキップして続行",
   "Select all results": "すべての結果を選択",

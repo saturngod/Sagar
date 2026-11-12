@@ -272,6 +272,7 @@ export const th: Record<string, string> = {
   "Select source items": "เลือกรายการต้นฉบับ",
   "Select all available": "เลือกรายการที่ใช้ได้ทั้งหมด",
   "Select untranslated": "เลือกรายการที่ยังไม่ได้แปล",
+  "Select untranslated on page": "เลือกรายการที่ยังไม่ได้แปลในหน้า",
   "Retry with smaller batches": "ลองอีกครั้งโดยแบ่งเป็นชุดเล็กลง",
   "Skip and continue": "ข้ามและทำต่อ",
   "Select all results": "เลือกผลลัพธ์ทั้งหมด",

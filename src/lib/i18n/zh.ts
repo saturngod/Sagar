@@ -273,6 +273,7 @@ export const zh: Record<string, string> = {
   "Select source items": "选择原文片段",
   "Select all available": "选择所有可用项",
   "Select untranslated": "选择未翻译项",
+  "Select untranslated on page": "选择未翻译项 · 页面",
   "Retry with smaller batches": "缩小批次后重试",
   "Skip and continue": "跳过并继续",
   "Select all results": "选择所有结果",

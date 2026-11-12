@@ -274,6 +274,7 @@ export const ko: Record<string, string> = {
   "Select source items": "원문 항목 선택",
   "Select all available": "사용 가능한 항목 모두 선택",
   "Select untranslated": "미번역 항목 선택",
+  "Select untranslated on page": "미번역 항목 선택 · 페이지",
   "Retry with smaller batches": "더 작은 묶음으로 다시 시도",
   "Skip and continue": "건너뛰고 계속",
   "Select all results": "모든 결과 선택",

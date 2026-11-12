@@ -16,7 +16,7 @@ import { ApiRequestDetails } from "./ApiRequestDetails";
 import { hasContent } from "./richText";
 import type { useChapterEditor } from "./useChapterEditor";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 20;
 const message = (error: unknown) =>
   error instanceof Error
     ? error.message
@@ -619,6 +619,26 @@ export function AiSelectionPanel({
                       <Icon name="paragraph" />
                       {t("Select untranslated")}
                     </button>
+                    {data.units.length > PAGE_SIZE ? (
+                      <button
+                        type="button"
+                        className="btn btn--small"
+                        disabled={running}
+                        onClick={() =>
+                          setSelected(
+                            new Set(
+                              data.units
+                                .slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+                                .filter((unit) => !unit.unavailable && !unit.hasProposal)
+                                .map((unit) => unit.id),
+                            ),
+                          )
+                        }
+                      >
+                        <Icon name="paragraph" />
+                        {t("Select untranslated on page")} {page + 1}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="btn btn--small"

@@ -332,6 +332,7 @@ export const my: Record<string, string> = {
   "· Images stay local.": "· ပုံများကို ဤကွန်ပျူတာတွင်သာ ထားပါသည်။",
   "Select all available": "ရနိုင်သမျှ အားလုံး ရွေးရန်",
   "Select untranslated": "မဘာသာပြန်ရသေးသည်များ ရွေးရန်",
+  "Select untranslated on page": "မဘာသာပြန်ရသေးသည်များ ရွေးရန် · စာမျက်နှာ",
   "Previous items": "ရှေ့ အပိုဒ်များ",
   Page: "စာမျက်နှာ",
   "Next items": "နောက် အပိုဒ်များ",

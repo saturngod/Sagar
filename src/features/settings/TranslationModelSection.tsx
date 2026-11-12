@@ -384,8 +384,7 @@ export function TranslationModelSection({ cli, custom }: TranslationModelSection
               : catalog.source === "cached"
                 ? t("Cached list")
                 : t("Known list")}{" "}
-            ·{" "}
-            {catalog.message}
+            · {catalog.message}
           </p>
         ) : null}
         <p className="dialog__muted" id="reasoning-effort-help">
