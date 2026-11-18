@@ -579,4 +579,6 @@ export const my: Record<string, string> = {
   "A changed copy was kept in:": "ပြောင်းထားသော မိတ္တူကို ထားရှိခဲ့သည်:",
   "Copies Sagar installed in coding CLIs are removed too.":
     "ကုဒ်ရေး CLI များတွင် Sagar ထည့်သွင်းထားသော မိတ္တူများကိုလည်း ဖယ်ရှားပါမည်။",
+  Skills: "စွမ်းရည်များ",
+  Server: "ဆာဗာ",
 };

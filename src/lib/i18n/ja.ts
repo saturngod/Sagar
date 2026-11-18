@@ -412,4 +412,6 @@ export const ja: Record<string, string> = {
   "A changed copy was kept in:": "変更されたコピーを残しました：",
   "Copies Sagar installed in coding CLIs are removed too.":
     "Sagar がコーディング CLI にインストールしたコピーも削除されます。",
+  Skills: "スキル",
+  Server: "サーバー",
 };

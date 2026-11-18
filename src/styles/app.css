@@ -3600,8 +3600,18 @@ button {
 }
 
 /* Server controls share the settings form and notice patterns. */
+/* One row of short tabs; scrolls sideways instead of wrapping when narrow. */
 .settings-tabs {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  /* Never let the dialog's column layout squeeze the tab row's height. */
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.settings-tabs .tab {
+  flex: none;
+  white-space: nowrap;
 }
 .content-server-settings {
   display: grid;

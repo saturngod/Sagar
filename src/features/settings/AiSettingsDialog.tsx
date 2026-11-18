@@ -537,9 +537,10 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
             tabIndex={tab === "translation" ? 0 : -1}
             className="tab"
             onClick={() => setTab("translation")}
+            title={t("Translation Model")}
           >
-            <Icon name="sparkles" />
-            {t("Translation Model")}
+            <Icon name="languages" />
+            {t("Model")}
           </button>
           <button
             type="button"
@@ -550,9 +551,10 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
             tabIndex={tab === "skills" ? 0 : -1}
             className="tab"
             onClick={() => setTab("skills")}
+            title={t("Translation skills")}
           >
             <Icon name="book" />
-            {t("Translation skills")}
+            {t("Skills")}
           </button>
           <button
             type="button"
@@ -563,9 +565,10 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
             tabIndex={tab === "server" ? 0 : -1}
             className="tab"
             onClick={() => setTab("server")}
+            title={t("Content server")}
           >
             <Icon name="server" />
-            {t("Content server")}
+            {t("Server")}
           </button>
         </div>
 

@@ -406,4 +406,6 @@ export const th: Record<string, string> = {
   "A changed copy was kept in:": "เก็บสำเนาที่ถูกเปลี่ยนไว้ใน:",
   "Copies Sagar installed in coding CLIs are removed too.":
     "สำเนาที่ Sagar ติดตั้งใน CLI สำหรับเขียนโค้ดจะถูกลบด้วย",
+  Skills: "ทักษะ",
+  Server: "เซิร์ฟเวอร์",
 };

@@ -412,4 +412,6 @@ export const ko: Record<string, string> = {
   "A changed copy was kept in:": "변경된 사본을 남겨 둔 곳:",
   "Copies Sagar installed in coding CLIs are removed too.":
     "Sagar가 코딩 CLI에 설치한 사본도 제거됩니다.",
+  Skills: "스킬",
+  Server: "서버",
 };

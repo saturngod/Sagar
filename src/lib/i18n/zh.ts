@@ -411,4 +411,6 @@ export const zh: Record<string, string> = {
   "A changed copy was kept in:": "已保留更改过的副本：",
   "Copies Sagar installed in coding CLIs are removed too.":
     "Sagar 在编程 CLI 中安装的副本也会被删除。",
+  Skills: "技能",
+  Server: "服务器",
 };
