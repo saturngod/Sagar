@@ -2,6 +2,7 @@ pub mod commands;
 pub mod domain;
 pub mod epub;
 pub mod error;
+pub mod kfx;
 pub mod security;
 pub mod services;
 pub mod storage;
@@ -169,6 +170,7 @@ pub fn run() {
             commands::uninstall_skill,
             commands::review_export,
             commands::export_epub,
+            commands::export_original,
             commands::list_ai_providers,
             commands::check_ai_cli,
             commands::save_ai_custom_provider,

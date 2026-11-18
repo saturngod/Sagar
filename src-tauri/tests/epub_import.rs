@@ -246,6 +246,7 @@ fn large_book_import_export_sweep() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("large export");

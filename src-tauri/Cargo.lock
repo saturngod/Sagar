@@ -3597,6 +3597,7 @@ dependencies = [
  "local-ip-address",
  "pulldown-cmark",
  "quick-xml",
+ "regex",
  "reqwest",
  "roxmltree 0.21.1",
  "rusqlite",

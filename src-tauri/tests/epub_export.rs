@@ -193,6 +193,7 @@ fn export_preserves_trailing_resources_when_zip_has_directory_entries() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export with directories");
@@ -245,6 +246,7 @@ fn translated_fixture_exports_and_reimports_with_assets_intact() {
             title: Some("မြစ်ဇာတ်ကြောင်း".into()),
             language: Some("my".into()),
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export succeeds");
@@ -386,6 +388,7 @@ fn completed_export_is_blocked_while_required_blocks_are_pending() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect_err("completed export must be blocked");
@@ -422,6 +425,7 @@ fn export_never_overwrites_its_own_snapshot() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect_err("snapshot overwrite rejected");
@@ -548,6 +552,7 @@ fn rich_translation_images_survive_save_export_and_reopen() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export");
@@ -711,6 +716,7 @@ fn empty_image_chapter_accepts_free_document_and_exports_it() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export");
@@ -806,6 +812,7 @@ fn draft_export_includes_reviewed_and_unreviewed_chapter_documents() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("draft export");
@@ -863,6 +870,7 @@ fn book_semantics_and_table_sections_save_export_and_reopen() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export");
@@ -931,6 +939,7 @@ fn chapter_heading_group_and_parent_save_export_and_reopen() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export");
@@ -983,6 +992,7 @@ fn borderless_table_styles_save_export_and_reopen() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export styled table");
@@ -1036,6 +1046,7 @@ fn unsupported_chapter_html_with_empty_link_saves_reloads_and_exports() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export permissive HTML");
@@ -1094,6 +1105,7 @@ fn malformed_or_invalid_image_chapter_exports_original_with_warning() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export falls back instead of aborting");
@@ -1136,6 +1148,7 @@ fn malformed_or_invalid_image_chapter_exports_original_with_warning() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("invalid image falls back instead of aborting");
@@ -1197,6 +1210,7 @@ fn authored_tables_save_reload_export_and_reopen() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export");
@@ -1245,6 +1259,7 @@ fn draft_export_without_originals_omits_untranslated_chapters() {
             title: None,
             language: None,
             include_original: false,
+            format: "epub".into(),
         },
     )
     .expect("filtered draft export");
@@ -1325,6 +1340,7 @@ fn draft_export_without_originals_requires_a_translation() {
             title: None,
             language: None,
             include_original: false,
+            format: "epub".into(),
         },
     )
     .expect_err("empty filtered export must fail");
@@ -1386,6 +1402,7 @@ fn book_settings_persist_instructions_and_export_metadata_without_changing_sourc
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export saved settings");
@@ -1444,6 +1461,7 @@ fn export_rejects_original_path_even_when_original_has_changed() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect_err("original path protected");
@@ -1482,6 +1500,7 @@ fn legacy_original_hash_is_protected_and_filtered_links_block_export() {
                 title: None,
                 language: None,
                 include_original: false,
+                format: "epub".into(),
             },
         )
         .expect_err("unsafe export rejected");
@@ -1503,6 +1522,7 @@ fn legacy_original_hash_is_protected_and_filtered_links_block_export() {
                 title: None,
                 language: None,
                 include_original: false,
+                format: "epub".into(),
             }
         )
         .is_err()
@@ -1557,6 +1577,7 @@ fn authored_heading_updates_nested_fragment_navigation() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .unwrap();
@@ -1680,6 +1701,7 @@ fn custom_cover_persists_exports_restores_and_keeps_source_immutable() {
                     title: None,
                     language: None,
                     include_original: true,
+                    format: "epub".into(),
                 },
             )
         };
@@ -1819,6 +1841,7 @@ fn svg_cover_with_html_doctype_loads_and_exports_unchanged() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export with directories");
@@ -1900,6 +1923,7 @@ fn xhtml11_doctype_imports_editable_content_and_survives_export() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export");
@@ -1954,6 +1978,7 @@ fn aligned_div_save_export_and_reopen() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export");
@@ -2017,6 +2042,7 @@ fn heading_group_and_time_save_export_and_reopen() {
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export");
@@ -2031,4 +2057,140 @@ fn heading_group_and_time_save_export_and_reopen() {
     assert!(output.contains(html));
     epub::inspect(&destination).expect("reopen exported EPUB");
     assert_eq!(std::fs::read(source).expect("source after"), original);
+}
+
+// ------------------------------------------------------- original / KFX
+
+fn kfx_text(path: &Path) -> String {
+    let bytes = std::fs::read(path).expect("kfx output");
+    assert_eq!(&bytes[..4], b"CONT", "KFX container signature");
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+#[test]
+fn original_epub_export_is_a_byte_identical_copy() {
+    let dir = tempdir();
+    let data_dir = tempdir();
+    let files = rich_book_files();
+    let refs: Vec<(&str, &[u8])> = files
+        .iter()
+        .map(|(n, b)| (n.as_str(), b.as_slice()))
+        .collect();
+    let source = write_epub(&dir, "source.epub", &refs);
+    let book = import_rich_book(&data_dir, &source);
+    save_block(&book, 0, 0, "ဘာသာပြန်", "reviewed");
+    let destination = dir.join("original-copy.epub");
+    let outcome = services::export::export_original(
+        &data_dir,
+        services::export::OriginalExportRequest {
+            project_id: book.project_id.clone(),
+            destination: destination.clone(),
+            format: "epub".into(),
+        },
+    )
+    .expect("original export");
+    assert_eq!(outcome.mode, "original");
+    assert_eq!(outcome.blocks_translated, 0);
+    assert_eq!(
+        std::fs::read(&destination).expect("copy"),
+        std::fs::read(&source).expect("source")
+    );
+}
+
+#[test]
+fn original_export_refuses_to_overwrite_the_source_book() {
+    let dir = tempdir();
+    let data_dir = tempdir();
+    let files = rich_book_files();
+    let refs: Vec<(&str, &[u8])> = files
+        .iter()
+        .map(|(n, b)| (n.as_str(), b.as_slice()))
+        .collect();
+    let source = write_epub(&dir, "source.epub", &refs);
+    let before = std::fs::read(&source).expect("source");
+    let book = import_rich_book(&data_dir, &source);
+    let error = services::export::export_original(
+        &data_dir,
+        services::export::OriginalExportRequest {
+            project_id: book.project_id,
+            destination: source.clone(),
+            format: "kfx".into(),
+        },
+    )
+    .expect_err("source path rejected");
+    assert_eq!(error.code, "destination_unsafe");
+    assert_eq!(std::fs::read(&source).expect("source"), before);
+}
+
+#[test]
+fn kfx_exports_contain_original_or_translated_text() {
+    let dir = tempdir();
+    let data_dir = tempdir();
+    let files = rich_book_files();
+    let refs: Vec<(&str, &[u8])> = files
+        .iter()
+        .map(|(n, b)| (n.as_str(), b.as_slice()))
+        .collect();
+    let source = write_epub(&dir, "source.epub", &refs);
+    let book = import_rich_book(&data_dir, &source);
+    save_block(&book, 0, 0, "မြန်မာဘာသာပြန်ခေါင်းစဉ်", "reviewed");
+
+    let original = dir.join("original.kfx");
+    services::export::export_original(
+        &data_dir,
+        services::export::OriginalExportRequest {
+            project_id: book.project_id.clone(),
+            destination: original.clone(),
+            format: "kfx".into(),
+        },
+    )
+    .expect("original kfx");
+    assert!(!kfx_text(&original).contains("မြန်မာဘာသာပြန်ခေါင်းစဉ်"));
+
+    let translated = dir.join("translated.kfx");
+    let outcome = services::export::export_epub(
+        &data_dir,
+        ExportRequest {
+            project_id: book.project_id.clone(),
+            destination: translated.clone(),
+            mode: "draft".into(),
+            title: None,
+            language: None,
+            include_original: true,
+            format: "kfx".into(),
+        },
+    )
+    .expect("translated kfx");
+    assert_eq!(PathBuf::from(&outcome.output_path), translated);
+    assert!(kfx_text(&translated).contains("မြန်မာဘာသာပြန်ခေါင်းစဉ်"));
+    // No stray temp files are left beside the output.
+    let leftovers: Vec<_> = std::fs::read_dir(&dir)
+        .expect("dir")
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().contains(".tmp-"))
+        .collect();
+    assert!(leftovers.is_empty());
+}
+
+#[test]
+fn unknown_export_format_is_rejected() {
+    let dir = tempdir();
+    let data_dir = tempdir();
+    let files = rich_book_files();
+    let refs: Vec<(&str, &[u8])> = files
+        .iter()
+        .map(|(n, b)| (n.as_str(), b.as_slice()))
+        .collect();
+    let source = write_epub(&dir, "source.epub", &refs);
+    let book = import_rich_book(&data_dir, &source);
+    let error = services::export::export_original(
+        &data_dir,
+        services::export::OriginalExportRequest {
+            project_id: book.project_id,
+            destination: dir.join("x.mobi"),
+            format: "mobi".into(),
+        },
+    )
+    .expect_err("rejected");
+    assert_eq!(error.code, "invalid_export_format");
 }

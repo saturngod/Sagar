@@ -45,12 +45,20 @@ export async function pickEpubFile(): Promise<string | null> {
   }
 }
 
+export type ExportFormat = "epub" | "kfx";
+
 /** Opens the native Save dialog for exports; null on cancel. */
-export async function pickExportDestination(defaultName: string): Promise<string | null> {
+export async function pickExportDestination(
+  defaultName: string,
+  format: ExportFormat = "epub",
+): Promise<string | null> {
   try {
     const selection = await save({
       defaultPath: defaultName,
-      filters: [{ name: "EPUB books", extensions: ["epub"] }],
+      filters:
+        format === "kfx"
+          ? [{ name: "Kindle books (KFX)", extensions: ["kfx"] }]
+          : [{ name: "EPUB books", extensions: ["epub"] }],
     });
     return typeof selection === "string" ? selection : null;
   } catch (error) {
@@ -190,6 +198,7 @@ export async function exportEpub(
   title: string | null,
   language: string | null,
   includeOriginal = true,
+  format: ExportFormat = "epub",
 ): Promise<ExportOutcome> {
   try {
     return await invoke<ExportOutcome>("export_epub", {
@@ -199,6 +208,24 @@ export async function exportEpub(
       title,
       language,
       includeOriginal,
+      format,
+    });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+
+/** Exports the untranslated source book (exact EPUB copy, or KFX). */
+export async function exportOriginal(
+  projectId: string,
+  destination: string,
+  format: ExportFormat,
+): Promise<ExportOutcome> {
+  try {
+    return await invoke<ExportOutcome>("export_original", {
+      projectId,
+      destination,
+      format,
     });
   } catch (error) {
     throw toCommandError(error);

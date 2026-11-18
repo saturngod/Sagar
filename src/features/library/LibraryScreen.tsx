@@ -11,6 +11,7 @@ import {
 } from "../../lib/tauri/commands";
 import { CommandError } from "../../lib/tauri/errors";
 import type { ImportWarning, ProjectSummary } from "../../types/project";
+import { BookExportMenu } from "../export/BookExportMenu";
 import { AiSettingsDialog } from "../settings/AiSettingsDialog";
 import type { AppearancePreferences } from "../settings/AppearanceSettings";
 import { BookSettingsDialog } from "../workspace/BookSettingsDialog";
@@ -426,6 +427,9 @@ function ConfirmRemoveDialog({
   );
 }
 
+/** The library has no open editor, so there are no pending saves to flush. */
+const flushNothing = () => Promise.resolve(true);
+
 function ProjectRow({
   project,
   onOpen,
@@ -508,6 +512,7 @@ function ProjectRow({
           {formatDate(project.updatedAt)}
         </span>
       </button>
+      <BookExportMenu project={project} onFlushSaves={flushNothing} iconSize={18} />
       <button
         type="button"
         className="icon-button"

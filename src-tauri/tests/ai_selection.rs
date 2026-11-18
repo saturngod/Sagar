@@ -406,6 +406,7 @@ fn selected_content_translates_then_appends_exports_and_reopens_with_original_im
             title: None,
             language: None,
             include_original: true,
+            format: "epub".into(),
         },
     )
     .expect("export");

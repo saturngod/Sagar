@@ -18,11 +18,11 @@ import {
   getProject,
   listChapters,
 } from "../../lib/tauri/commands";
-import type { ChapterContent, ExportOutcome } from "../../types/chapter";
+import type { ChapterContent } from "../../types/chapter";
 import type { ChapterSummary, ImportWarning, ProjectSummary } from "../../types/project";
 import { ChapterPicker } from "../chapters/ChapterPicker";
 import { ChapterSidebar } from "../chapters/ChapterSidebar";
-import { ExportDialog } from "../export/ExportDialog";
+import { BookExportMenu } from "../export/BookExportMenu";
 import { SourcePane } from "../reader/SourcePane";
 import { AiBackgroundBar } from "../translator/AiBackgroundBar";
 import { plainFragment } from "../translator/richText";
@@ -89,8 +89,6 @@ export function WorkspaceFrame({
   const [readingPane, setReadingPane] = useState<"original" | "translation" | null>(null);
   const [chapterSwitching, setChapterSwitching] = useState(false);
   const [readingNavigationFailed, setReadingNavigationFailed] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [exportOutcome, setExportOutcome] = useState<ExportOutcome | null>(null);
   const [langOpen, setLangOpen] = useState(false);
   const [bookSettingsOpen, setBookSettingsOpen] = useState(false);
   const [sharingOpen, setSharingOpen] = useState<SharingMode | null>(null);
@@ -425,16 +423,13 @@ export function WorkspaceFrame({
         >
           {t(SAVE_LABEL[editor.indicator])}
         </span>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={t("Export EPUB")}
-          title={t("Export EPUB")}
-          disabled={projectState.status !== "ready"}
-          onClick={() => setExportOpen(true)}
-        >
-          <Icon name="download" />
-        </button>
+        {project ? (
+          <BookExportMenu
+            project={project}
+            onFlushSaves={editor.flushAll}
+            disabled={projectState.status !== "ready"}
+          />
+        ) : null}
         <button
           type="button"
           className="icon-button"
@@ -732,27 +727,10 @@ export function WorkspaceFrame({
           }}
         />
       ) : null}
-      {exportOpen && project ? (
-        <ExportDialog
-          project={project}
-          onClose={() => setExportOpen(false)}
-          onFlushSaves={editor.flushAll}
-          onOutcome={(outcome) => {
-            setExportOutcome(outcome);
-            setExportOpen(false);
-          }}
-        />
-      ) : null}
       {sharingResult ? (
         <SharingResultPanel
           message={sharingResult}
           onDismiss={() => setSharingResult(null)}
-        />
-      ) : null}
-      {exportOutcome ? (
-        <ExportOutcomePanel
-          outcome={exportOutcome}
-          onDismiss={() => setExportOutcome(null)}
         />
       ) : null}
     </div>
@@ -809,61 +787,6 @@ function SharingResultPanel({
             {t("Done")}
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function ExportOutcomePanel({
-  outcome,
-  onDismiss,
-}: {
-  outcome: ExportOutcome;
-  onDismiss: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="dialog-backdrop">
-      <div className="dialog" role="alertdialog" aria-label={t("Export finished")}>
-        <div className="panel__header">
-          <h2 className="panel__heading">
-            {t("Export")} {outcome.mode === "completed" ? "completed" : t("draft")}{" "}
-            finished
-          </h2>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={t("Close")}
-            title={t("Close")}
-            onClick={onDismiss}
-          >
-            <Icon name="close" />
-          </button>
-        </div>
-        <StatusNotice kind="success">
-          {outcome.blocksTranslated} translated chapter
-          {outcome.blocksTranslated === 1 ? "" : "s"} written across{" "}
-          {outcome.chaptersExported} chapter{outcome.chaptersExported === 1 ? "" : "s"}.
-        </StatusNotice>
-        <p className="dialog__path">
-          {t("Output file:")}
-          <code>{outcome.outputPath}</code>
-        </p>
-        {outcome.warnings.length > 0 ? (
-          <ul className="warning-list">
-            {outcome.warnings.map((warning, index) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: static per-export list
-              <li key={`${warning.code}-${index}`} className="warning-list__item">
-                {warning.location ? (
-                  <strong className="warning-list__location">{warning.location}</strong>
-                ) : null}
-                <span>{warning.message}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="dialog__muted">{t("No validation warnings.")}</p>
-        )}
       </div>
     </div>
   );

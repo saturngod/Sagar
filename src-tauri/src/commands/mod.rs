@@ -205,6 +205,7 @@ pub async fn review_export(app: AppHandle, project_id: String) -> Result<ExportR
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn export_epub(
     app: AppHandle,
     project_id: String,
@@ -213,6 +214,7 @@ pub async fn export_epub(
     title: Option<String>,
     language: Option<String>,
     include_original: Option<bool>,
+    format: Option<String>,
 ) -> Result<ExportOutcome, AppError> {
     let data_dir = app_data_dir(&app)?;
     run_blocking(move || {
@@ -225,6 +227,29 @@ pub async fn export_epub(
                 title,
                 language,
                 include_original: include_original.unwrap_or(true),
+                format: format.unwrap_or_else(|| "epub".into()),
+            },
+        )
+    })
+    .await
+}
+
+/// Exports the untranslated source book as EPUB (exact copy) or KFX.
+#[tauri::command]
+pub async fn export_original(
+    app: AppHandle,
+    project_id: String,
+    destination: String,
+    format: String,
+) -> Result<ExportOutcome, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || {
+        services::export::export_original(
+            &data_dir,
+            services::export::OriginalExportRequest {
+                project_id,
+                destination: std::path::PathBuf::from(destination),
+                format,
             },
         )
     })

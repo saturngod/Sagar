@@ -5,6 +5,7 @@ import { Icon } from "../../components/Icon";
 import { StatusNotice } from "../../components/StatusNotice";
 import { useTranslation } from "../../lib/i18n";
 import {
+  type ExportFormat,
   exportEpub,
   pickExportDestination,
   reviewExport,
@@ -14,6 +15,8 @@ import type { ProjectSummary } from "../../types/project";
 
 type ExportDialogProps = {
   project: ProjectSummary;
+  /** Output format of the translated book. */
+  format: ExportFormat;
   onClose: () => void;
   /** Flushes pending chapter saves before reviewing/exporting. */
   onFlushSaves: () => Promise<boolean>;
@@ -26,6 +29,7 @@ type ExportDialogProps = {
  */
 export function ExportDialog({
   project,
+  format,
   onClose,
   onFlushSaves,
   onOutcome,
@@ -141,7 +145,8 @@ export function ExportDialog({
     setLanguageError(null);
     const fileBase = (title.trim() || review.title).replace(/[\\/:*?"<>|]/g, "_");
     const destination = await pickExportDestination(
-      `${fileBase}-${language.trim()}.epub`,
+      `${fileBase}-${language.trim()}.${format}`,
+      format,
     );
     if (destination === null) {
       return; // Save dialog cancelled.
@@ -155,6 +160,7 @@ export function ExportDialog({
         title.trim() === "" ? null : title.trim(),
         language.trim(),
         mode === "draft" ? includeOriginal : true,
+        format,
       );
       onOutcome(outcome);
     } catch (error) {
@@ -178,7 +184,7 @@ export function ExportDialog({
       >
         <div className="panel__header export-dialog__header">
           <h2 className="panel__heading" id="export-dialog-title">
-            {t("Export EPUB")}
+            {format === "kfx" ? t("Export translated KFX") : t("Export translated EPUB")}
           </h2>
           <button
             type="button"
@@ -354,7 +360,9 @@ export function ExportDialog({
                   }
                 >
                   <Icon name="download" />
-                  {t("Export completed EPUB")}
+                  {format === "kfx"
+                    ? t("Export completed KFX")
+                    : t("Export completed EPUB")}
                 </button>
                 <button
                   type="button"
@@ -377,9 +385,13 @@ export function ExportDialog({
                 </button>
               </div>
               <p className="dialog__muted">
-                {t(
-                  "Save a separate EPUB to a location you choose. Your original book stays unchanged.",
-                )}
+                {format === "kfx"
+                  ? t(
+                      "Save a Kindle KFX file to a location you choose. Your original book stays unchanged. Images that are not JPEG, PNG or GIF are omitted and listed after export.",
+                    )
+                  : t(
+                      "Save a separate EPUB to a location you choose. Your original book stays unchanged.",
+                    )}
               </p>
             </div>
           </>
