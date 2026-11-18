@@ -223,6 +223,7 @@ mod tests {
         let mut conn = Connection::open_in_memory().unwrap();
         conn.execute_batch("CREATE TABLE ai_custom_providers(id TEXT PRIMARY KEY,name TEXT,base_url TEXT,api_key TEXT,model TEXT,created_at TEXT,updated_at TEXT);
             INSERT INTO ai_custom_providers VALUES ('p','Existing','https://example.invalid/v1','private-key','m','before','before');
+            CREATE TABLE projects(id TEXT PRIMARY KEY);
             PRAGMA user_version=11;").unwrap();
         migrations::apply(&mut conn).unwrap();
         assert_eq!(list_custom(&conn).unwrap()[0].protocol, "openai");

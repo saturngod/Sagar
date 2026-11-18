@@ -1,9 +1,18 @@
-import { type MouseEvent, type RefObject, useEffect, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { HtmlCode } from "../../components/HtmlCode";
 import { Icon } from "../../components/Icon";
 import { StatusNotice } from "../../components/StatusNotice";
 import { useTranslation } from "../../lib/i18n";
 import type { ChapterContent } from "../../types/chapter";
+import { PaneSearchBar, PaneSearchButton } from "../workspace/PaneSearchBar";
+import { usePaneSearch } from "../workspace/usePaneSearch";
 
 /** Full chapter preview is allowlisted in Rust. Raw XHTML is displayed as text. */
 export function SourcePane({
@@ -29,6 +38,18 @@ export function SourcePane({
     "idle",
   );
   const copyRequest = useRef(0);
+  const ready = !!content && !loading && !error;
+  const search = usePaneSearch({
+    pane: "source",
+    available: ready && !immersive,
+    // Searches whichever view is showing: the rendered preview or its code.
+    getRoot: useCallback(
+      (pane: HTMLElement) =>
+        pane.querySelector<HTMLElement>(view === "html" ? ".source-code" : ".book-text"),
+      [view],
+    ),
+    revision: `${view}:${content?.chapterId ?? ""}:${ready}`,
+  });
   // biome-ignore lint/correctness/useExhaustiveDependencies: Reset feedback and invalidate pending clipboard results when the displayed chapter or view changes.
   useEffect(() => {
     setCopyState("idle");
@@ -51,6 +72,7 @@ export function SourcePane({
   }
   return (
     <section
+      ref={search.paneRef}
       className={`pane pane--source${immersive ? " pane--immersive" : ""}`}
       aria-labelledby={immersive ? undefined : "source-pane-heading"}
       aria-label={immersive ? t("Original chapter content") : undefined}
@@ -60,6 +82,12 @@ export function SourcePane({
           {t("Original")} <span className="pane__badge">{t("Read only")}</span>
         </h2>
         <div className="pane__actions">
+          <PaneSearchButton
+            search={search}
+            label={t("Search original")}
+            controls="source-pane-search"
+            disabled={!ready}
+          />
           <fieldset
             className="view-switch view-switch--icons"
             aria-label={t("Original view")}
@@ -109,6 +137,11 @@ export function SourcePane({
           </button>
         </div>
       </div>
+      <PaneSearchBar
+        id="source-pane-search"
+        search={search}
+        label={t("Search original")}
+      />
       <div className="pane__scroll" ref={scrollRef}>
         {!immersive && copyState === "copied" ? (
           <StatusNotice kind="success">{t("Original HTML copied.")}</StatusNotice>

@@ -2,8 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { StatusNotice } from "../../components/StatusNotice";
 import { useTranslation } from "../../lib/i18n";
-import { getBookSettings, getProject, saveBookSettings } from "../../lib/tauri/commands";
-import type { BookSettings, ProjectSummary } from "../../types/project";
+import {
+  getBookSettings,
+  getProject,
+  listTranslationSkills,
+  saveBookSettings,
+} from "../../lib/tauri/commands";
+import type {
+  BookSettings,
+  ProjectSummary,
+  TranslationSkillSummary,
+} from "../../types/project";
+import { TranslationSkillPicker } from "./TranslationSkillPicker";
 
 export function BookSettingsDialog({
   project,
@@ -24,6 +34,29 @@ export function BookSettingsDialog({
   const dialog = useRef<HTMLDivElement>(null);
   const coverInput = useRef<HTMLInputElement>(null);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
+  const [skills, setSkills] = useState<TranslationSkillSummary[] | null>(null);
+  const [skillsError, setSkillsError] = useState<string | null>(null);
+  const [skillsRetry, setSkillsRetry] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: skillsRetry explicitly reloads the skill list after a failure.
+  useEffect(() => {
+    let disposed = false;
+    setSkillsError(null);
+    listTranslationSkills()
+      .then((value) => {
+        if (!disposed) setSkills(value);
+      })
+      .catch((failure: unknown) => {
+        if (!disposed)
+          setSkillsError(
+            failure instanceof Error
+              ? failure.message
+              : "Translation skills could not be loaded.",
+          );
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [skillsRetry]);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     dialog.current?.focus();
@@ -371,6 +404,64 @@ export function BookSettingsDialog({
                 </div>
               ) : (
                 <div className="book-settings__instructions">
+                  <section
+                    className="book-settings__skills"
+                    aria-labelledby="book-settings-skills-heading"
+                  >
+                    <h3
+                      className="book-settings__section-title"
+                      id="book-settings-skills-heading"
+                    >
+                      <Icon name="sparkles" />
+                      {t("Translation skills")}
+                    </h3>
+                    {skills ? (
+                      <div className="book-settings__fields">
+                        {(["genre", "language"] as const).map((kind) => (
+                          <TranslationSkillPicker
+                            key={kind}
+                            kind={kind}
+                            skills={skills}
+                            value={
+                              (kind === "genre"
+                                ? settings.genreSkillId
+                                : settings.languageSkillId) ?? null
+                            }
+                            targetLanguage={settings.targetLanguage}
+                            disabled={saving || readingCover}
+                            onChange={(id) =>
+                              setSettings((current) =>
+                                current
+                                  ? {
+                                      ...current,
+                                      [kind === "genre"
+                                        ? "genreSkillId"
+                                        : "languageSkillId"]: id,
+                                    }
+                                  : current,
+                              )
+                            }
+                          />
+                        ))}
+                      </div>
+                    ) : skillsError ? (
+                      <StatusNotice
+                        kind="error"
+                        onRetry={() => setSkillsRetry((v) => v + 1)}
+                      >
+                        {skillsError}
+                      </StatusNotice>
+                    ) : (
+                      <StatusNotice kind="loading">
+                        {t("Loading translation skills…")}
+                      </StatusNotice>
+                    )}
+                    <p className="dialog__muted">
+                      {t(
+                        "Skill rules are sent with every AI translation in this book. The book and current-run instructions take precedence when they conflict.",
+                      )}
+                    </p>
+                  </section>
                   <label className="form-field">
                     <span>{t("Book translation instructions")}</span>
                     <textarea

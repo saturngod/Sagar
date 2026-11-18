@@ -497,4 +497,11 @@ export const rki: Record<string, string> = {
   "Language tag": "ဘာသာစကားကုဒ်",
   "Language details": "ဘာသာစကား အသေးစိတ်",
   "Used for translation and export.": "ဘာသာပြန်စွာနန့် ဖိုင်ထုတ်ယူစွာမှာ သုံးပါရေ။",
+  "Search original": "မူရင်းမှာ ရှာဖို့",
+  "Search translation": "ဘာသာပြန်စာမှာ ရှာဖို့",
+  "Search…": "ရှာဖို့…",
+  "Previous match": "အရင် တွိချက်",
+  "Next match": "နောက် တွိချက်",
+  "Close search": "ရှာဖွီမှု ပိတ်ဖို့",
+  "No results": "ရလဒ် မဟိပါ",
 };

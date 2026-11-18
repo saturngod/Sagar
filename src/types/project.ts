@@ -51,4 +51,41 @@ export type BookSettings = {
   targetLanguage: string;
   instructions: string;
   customCover: string | null;
+  /** Selected genre translation skill, or null for none. */
+  genreSkillId?: string | null;
+  /** Selected target-language translation skill, or null for none. */
+  languageSkillId?: string | null;
+};
+
+export type TranslationSkillKind = "genre" | "language";
+
+export type TranslationSkillSummary = {
+  id: string;
+  label: string;
+  description: string;
+  kind: TranslationSkillKind;
+  /** Primary language subtag for language skills (for example "my"). */
+  target: string | null;
+  version: string;
+  builtin: boolean;
+};
+
+export type TranslationSkill = TranslationSkillSummary & { body: string };
+
+export type SkillInstallStatus =
+  | "notInstalled"
+  | "installed"
+  | "updateAvailable"
+  | "modified"
+  | "conflict";
+
+/** One coding CLI's copy of a translation skill. */
+export type SkillInstall = {
+  providerId: string;
+  label: string;
+  /** User-level skills folder, with the home folder shown as "~". */
+  folder: string;
+  /** True when the CLI was found on this computer. */
+  detected: boolean;
+  status: SkillInstallStatus;
 };

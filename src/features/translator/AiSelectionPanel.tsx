@@ -37,7 +37,6 @@ export function AiSelectionPanel({
   chapterTitle,
   projectId,
   selection,
-  bookInstructions,
   currentInstructions,
   onInstructions,
   editor,
@@ -48,7 +47,6 @@ export function AiSelectionPanel({
   chapterTitle: string;
   projectId: string;
   selection: TranslationSelection | null;
-  bookInstructions: string;
   currentInstructions: string;
   onInstructions: (value: string) => void;
   editor: ReturnType<typeof useChapterEditor>;
@@ -688,33 +686,6 @@ export function AiSelectionPanel({
                     </button>
                   </div>
                 ) : null}
-                <details className="settings-help">
-                  <summary>
-                    <Icon name="keep" />
-                    {t("Translation instructions")}
-                  </summary>
-                  {bookInstructions ? (
-                    <details>
-                      <summary>{t("Book instructions")}</summary>
-                      <p className="book-instructions">{bookInstructions}</p>
-                    </details>
-                  ) : null}
-                  <label className="form-field">
-                    <span>{t("Instructions for this run (optional)")}</span>
-                    <textarea
-                      rows={3}
-                      maxLength={20000}
-                      value={currentInstructions}
-                      disabled={running || editor.appending}
-                      onChange={(event) => onInstructions(event.target.value)}
-                    />
-                  </label>
-                  <p className="dialog__muted">
-                    {t(
-                      "Applies to new runs. Resume and Retry keep the saved run’s instructions.",
-                    )}
-                  </p>
-                </details>
               </>
             ) : run ? (
               <>
@@ -1004,6 +975,19 @@ export function AiSelectionPanel({
           </label>
         ) : null}
 
+        {step === "select" ? (
+          <label className="ai-selection__instructions">
+            <span>{t("Instructions for this run (optional)")}</span>
+            <textarea
+              rows={1}
+              maxLength={20000}
+              value={currentInstructions}
+              disabled={running || editor.appending}
+              onChange={(event) => onInstructions(event.target.value)}
+              placeholder={t("Additional guidance for this chapter…")}
+            />
+          </label>
+        ) : null}
         {step === "select" && needsProvider ? (
           <div className="ai-selection__consent">{consentBox}</div>
         ) : null}

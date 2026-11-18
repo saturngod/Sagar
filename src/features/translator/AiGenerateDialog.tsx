@@ -11,7 +11,7 @@ import {
   listAiProviders,
   startAiTranslation,
 } from "../../lib/tauri/ai";
-import { getBookSettings, getProject } from "../../lib/tauri/commands";
+import { getProject } from "../../lib/tauri/commands";
 import { CommandError } from "../../lib/tauri/errors";
 import type {
   AiProviderList,
@@ -63,7 +63,6 @@ export function AiGenerateDialog({
   const [project, setProject] = useState<ProjectSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
-  const [bookInstructions, setBookInstructions] = useState("");
   const [currentInstructions, setCurrentInstructions] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [proposal, setProposal] = useState<string | null>(null);
@@ -173,18 +172,12 @@ export function AiGenerateDialog({
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      listAiProviders(),
-      getTranslationSelection(),
-      getProject(projectId),
-      getBookSettings(projectId),
-    ])
-      .then(([list, saved, current, book]) => {
+    Promise.all([listAiProviders(), getTranslationSelection(), getProject(projectId)])
+      .then(([list, saved, current]) => {
         if (cancelled) return;
         setProviders(list);
         setSelection(saved);
         setProject(current);
-        setBookInstructions(book.instructions);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -492,47 +485,49 @@ export function AiGenerateDialog({
           </button>
         </div>
 
-        <fieldset className="tabs ai-mode" aria-label={t("Translation mode")}>
-          <button
-            type="button"
-            className="tab"
-            aria-pressed={mode === "whole"}
-            disabled={running || selectedBusy || editor.appending}
-            onClick={() => setMode("whole")}
-          >
-            <Icon name="book" />
-            {t("Whole chapter")}
-          </button>
-          <button
-            type="button"
-            className="tab"
-            aria-pressed={mode === "selected"}
-            disabled={running || selectedBusy || editor.appending}
-            onClick={() => setMode("selected")}
-          >
-            <Icon name="paragraph" />
-            {t("Selected paragraphs")}
-          </button>
-        </fieldset>
+        <div className="ai-generation__bar">
+          <fieldset className="tabs ai-mode" aria-label={t("Translation mode")}>
+            <button
+              type="button"
+              className="tab"
+              aria-pressed={mode === "whole"}
+              disabled={running || selectedBusy || editor.appending}
+              onClick={() => setMode("whole")}
+            >
+              <Icon name="book" />
+              {t("Whole chapter")}
+            </button>
+            <button
+              type="button"
+              className="tab"
+              aria-pressed={mode === "selected"}
+              disabled={running || selectedBusy || editor.appending}
+              onClick={() => setMode("selected")}
+            >
+              <Icon name="paragraph" />
+              {t("Selected paragraphs")}
+            </button>
+          </fieldset>
 
-        {selection && providers ? (
-          <div className="ai-config-summary" role="status">
-            <span>
-              <Icon name="sparkles" />
-              <strong>
-                {agentLabel(selection.agent, providers.cli, providers.custom)}
-              </strong>{" "}
-              · {selection.model} ·{" "}
-              {selection.reasoningEffort ?? t("Default (provider setting)")}
-            </span>
-            {project ? (
+          {selection && providers ? (
+            <div className="ai-config-summary" role="status">
               <span>
-                <Icon name="languages" />
-                {formatDirection(project.sourceLanguage, project.targetLanguage)}
+                <Icon name="sparkles" />
+                <strong>
+                  {agentLabel(selection.agent, providers.cli, providers.custom)}
+                </strong>{" "}
+                · {selection.model} ·{" "}
+                {selection.reasoningEffort ?? t("Default (provider setting)")}
               </span>
-            ) : null}
-          </div>
-        ) : null}
+              {project ? (
+                <span>
+                  <Icon name="languages" />
+                  {formatDirection(project.sourceLanguage, project.targetLanguage)}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
         {mode === "selected" ? (
           <AiSelectionPanel
@@ -541,9 +536,12 @@ export function AiGenerateDialog({
             chapterTitle={chapterTitle}
             projectId={projectId}
             selection={selection}
-            bookInstructions={bookInstructions}
             currentInstructions={currentInstructions}
-            onInstructions={setCurrentInstructions}
+            onInstructions={(value) => {
+              setCurrentInstructions(value);
+              // Changed instructions restart a whole-chapter Retry.
+              setStreamed("");
+            }}
             editor={editor}
             onBusy={setSelectedBusy}
             onBackground={handleBackground}
@@ -575,26 +573,6 @@ export function AiGenerateDialog({
                     placeholder={t("Additional guidance for this chapter…")}
                   />
                 </label>
-                <details className="settings-help ai-generation__help">
-                  <summary>
-                    <Icon name="keep" />
-                    {t("Translation instructions")}
-                  </summary>
-                  {bookInstructions ? (
-                    <>
-                      <strong>{t("Book instructions")}</strong>
-                      <p className="book-instructions">{bookInstructions}</p>
-                    </>
-                  ) : null}
-                  <p className="dialog__muted">
-                    {t(
-                      "Book instructions and this run's instructions are sent together. Changing these instructions restarts translation on Retry.",
-                    )}
-                  </p>
-                  <p className="dialog__muted">
-                    {t("Original formatting is included for preservation.")}
-                  </p>
-                </details>
                 <div className="ai-generation__start">
                   <label className="export-ack">
                     <input

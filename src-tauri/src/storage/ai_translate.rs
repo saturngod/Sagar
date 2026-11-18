@@ -15,6 +15,9 @@ pub struct TranslationSource {
     pub source_language: Option<String>,
     pub target_language: String,
     pub instructions: String,
+    /// Book Settings translation skills (rendered by `services::skills`).
+    pub genre_skill_id: Option<String>,
+    pub language_skill_id: Option<String>,
     /// Non-blank source paragraphs in reading order (emptiness check only;
     /// the HTML body travels as translation source).
     pub paragraphs: Vec<String>,
@@ -26,19 +29,41 @@ pub fn translation_source(
     conn: &Connection,
     chapter_id: &str,
 ) -> Result<TranslationSource, AppError> {
-    let (project_id, resource_href, source_language, target_language, instructions): (
+    #[allow(clippy::type_complexity)]
+    let (
+        project_id,
+        resource_href,
+        source_language,
+        target_language,
+        instructions,
+        genre_skill,
+        language_skill,
+    ): (
         String,
         String,
         Option<String>,
         String,
         String,
+        Option<String>,
+        Option<String>,
     ) = conn
         .query_row(
-            "SELECT ch.project_id, ch.resource_href, p.source_language, p.target_language, p.translation_instructions
+            "SELECT ch.project_id, ch.resource_href, p.source_language, p.target_language, p.translation_instructions,
+                    p.translation_skill_id, p.language_skill_id
              FROM chapters ch JOIN projects p ON p.id = ch.project_id
              WHERE ch.id = ?1",
             rusqlite::params![chapter_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                ))
+            },
         )
         .map_err(|_| {
             AppError::new(
@@ -64,6 +89,8 @@ pub fn translation_source(
         source_language,
         target_language,
         instructions,
+        genre_skill_id: genre_skill,
+        language_skill_id: language_skill,
         paragraphs,
     })
 }
@@ -148,6 +175,24 @@ mod tests {
             source.paragraphs,
             vec!["One".to_string(), "Two".to_string()]
         );
+    }
+
+    #[test]
+    fn source_carries_the_books_selected_skills() {
+        let conn = setup();
+        let source = translation_source(&conn, "c1").unwrap();
+        assert_eq!(
+            (source.genre_skill_id, source.language_skill_id),
+            (None, None)
+        );
+        conn.execute(
+            "UPDATE projects SET translation_skill_id='sagar-wuxia', language_skill_id='sagar-target-my'",
+            [],
+        )
+        .unwrap();
+        let source = translation_source(&conn, "c1").unwrap();
+        assert_eq!(source.genre_skill_id.as_deref(), Some("sagar-wuxia"));
+        assert_eq!(source.language_skill_id.as_deref(), Some("sagar-target-my"));
     }
 
     #[test]

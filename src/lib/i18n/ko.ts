@@ -329,4 +329,87 @@ export const ko: Record<string, string> = {
   "Language tag": "언어 태그",
   "Language details": "언어 세부 정보",
   "Used for translation and export.": "번역과 내보내기에 사용합니다.",
+  "Search original": "원문 검색",
+  "Search translation": "번역문 검색",
+  "Search…": "검색…",
+  "Previous match": "이전 일치",
+  "Next match": "다음 일치",
+  "Close search": "검색 닫기",
+  "No results": "결과 없음",
+  "Translation skills": "번역 스킬",
+  "Loading translation skills…": "번역 스킬을 불러오는 중…",
+  "Skill rules are sent with every AI translation in this book. The book and current-run instructions take precedence when they conflict.":
+    "스킬 규칙은 이 도서의 모든 AI 번역과 함께 전송됩니다. 충돌하면 도서 지침과 이번 실행 지침이 우선합니다.",
+  "Genre skill": "장르 스킬",
+  "Language skill": "언어 스킬",
+  None: "없음",
+  "Unavailable skill": "사용할 수 없는 스킬",
+  "This skill is no longer available. Choose another skill or None.":
+    "이 스킬은 더 이상 사용할 수 없습니다. 다른 스킬이나 없음을 선택하세요.",
+  "This language skill doesn't match the translation language. Choose another skill or None.":
+    "이 언어 스킬은 번역 언어와 맞지 않습니다. 다른 스킬이나 없음을 선택하세요.",
+  "No language skill is available for this translation language yet.":
+    "이 번역 언어에 사용할 수 있는 언어 스킬이 아직 없습니다.",
+  "Choose the kind of book to apply its translation rules.":
+    "번역 규칙을 적용할 도서 종류를 선택하세요.",
+  "Choose rules for writing the translation language.":
+    "번역 언어로 쓰기 위한 규칙을 선택하세요.",
+  "Skill rules": "스킬 규칙",
+  "Loading skill rules…": "스킬 규칙을 불러오는 중…",
+  Fiction: "소설",
+  "Non-Fiction": "논픽션",
+  "Biography & Memoir": "전기 및 회고록",
+  "Craft & Career Guides": "기술 및 커리어 가이드",
+  "Academic & Translation Studies": "학술 및 번역학",
+  "Translated Literature": "번역 문학",
+  "Children & Young Adult": "아동 및 청소년",
+  "Wuxia 武侠": "무협 武侠",
+  "Xianxia 仙侠": "선협 仙侠",
+  "Xuanhuan 玄幻": "현환 玄幻",
+  "Danmei 耽美": "단미 耽美",
+  Myanmar: "미얀마어",
+  "Import skill": "스킬 가져오기",
+  "Importing…": "가져오는 중…",
+  "Skills add translation rules for a kind of book or a translation language. Choose them per book in Book Settings. Built-in skills can't be changed; duplicate one to make your own version. Imported skills are saved on this computer.":
+    "스킬은 도서 종류나 번역 언어에 맞는 번역 규칙을 추가합니다. 도서 설정에서 도서마다 선택하세요. 기본 제공 스킬은 변경할 수 없으니 복제하여 나만의 버전을 만드세요. 가져온 스킬은 이 컴퓨터에 저장됩니다.",
+  "A skill with this name already exists. Replace it?":
+    "같은 이름의 스킬이 이미 있습니다. 바꾸시겠습니까?",
+  Replace: "바꾸기",
+  Imported: "가져옴",
+  Created: "만듦",
+  Deleted: "삭제됨",
+  Genre: "장르",
+  "Built-in": "기본 제공",
+  Duplicate: "복제",
+  "Skill details": "스킬 세부 정보",
+  "Skill file (SKILL.md)": "스킬 파일 (SKILL.md)",
+  "Delete skill?": "스킬을 삭제하시겠습니까?",
+  "Books that use it will go back to no skill:":
+    "이 스킬을 사용하는 도서는 스킬 없음으로 돌아갑니다:",
+  "Not installed": "설치 안 됨",
+  Installed: "설치됨",
+  "Update available": "업데이트 있음",
+  "Changed outside Sagar": "Sagar 밖에서 변경됨",
+  "Not Sagar's folder": "Sagar의 폴더 아님",
+  "Checking coding CLIs…": "코딩 CLI 확인 중…",
+  "Install in coding CLIs": "코딩 CLI에 설치",
+  "Installing…": "설치 중…",
+  "Install in all found CLIs": "찾은 모든 CLI에 설치",
+  "Copies this skill into each CLI's own skills folder, so you can use it outside Sagar too. Sagar's own translations don't need this. Sagar only changes folders it installed.":
+    "이 스킬을 각 CLI의 스킬 폴더에 복사하여 Sagar 밖에서도 사용할 수 있게 합니다. Sagar 자체 번역에는 필요하지 않습니다. Sagar는 자신이 설치한 폴더만 변경합니다.",
+  Update: "업데이트",
+  Install: "설치",
+  "Replace with Sagar's version": "Sagar 버전으로 바꾸기",
+  Uninstall: "제거",
+  "A folder with this name is already there and wasn't installed by Sagar, so Sagar won't change it.":
+    "같은 이름의 폴더가 이미 있고 Sagar가 설치한 것이 아니므로 Sagar는 변경하지 않습니다.",
+  "Replace the changed copy with Sagar's version? Changes made outside Sagar will be lost.":
+    "변경된 사본을 Sagar 버전으로 바꾸시겠습니까? Sagar 밖에서 한 변경 내용은 사라집니다.",
+  "Uninstall the changed copy? Changes made outside Sagar will be lost.":
+    "변경된 사본을 제거하시겠습니까? Sagar 밖에서 한 변경 내용은 사라집니다.",
+  "OpenCode also reads the Claude Code and Codex skill folders, so this skill may appear twice in OpenCode.":
+    "OpenCode는 Claude Code와 Codex 스킬 폴더도 읽으므로 이 스킬이 OpenCode에 두 번 나타날 수 있습니다.",
+  "A changed copy was kept in:": "변경된 사본을 남겨 둔 곳:",
+  "Copies Sagar installed in coding CLIs are removed too.":
+    "Sagar가 코딩 CLI에 설치한 사본도 제거됩니다.",
 };

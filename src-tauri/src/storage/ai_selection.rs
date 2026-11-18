@@ -13,6 +13,9 @@ pub struct RunConfig {
     pub target_language: String,
     pub book_instructions: String,
     pub current_instructions: String,
+    /// Translation-skill guidance captured when the run was prepared.
+    #[serde(default)]
+    pub skill_guidance: String,
     pub fingerprint: String,
     pub project_id: String,
     pub resource_href: String,

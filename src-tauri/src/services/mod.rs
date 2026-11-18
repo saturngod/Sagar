@@ -13,6 +13,8 @@ pub mod import;
 mod opencode_stream;
 pub mod projects;
 pub mod sharing;
+pub mod skill_install;
+pub mod skills;
 
 mod qoder;
 pub mod workspace;

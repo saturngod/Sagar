@@ -15,6 +15,12 @@ pub struct BookSettings {
     pub instructions: String,
     #[serde(default)]
     pub custom_cover: Option<String>,
+    /// Selected genre translation skill (see `services::skills`).
+    #[serde(default)]
+    pub genre_skill_id: Option<String>,
+    /// Selected target-language translation skill.
+    #[serde(default)]
+    pub language_skill_id: Option<String>,
 }
 
 fn checked(value: &str, name: &str, limit: usize) -> Result<String, AppError> {
@@ -43,11 +49,13 @@ pub fn get(data_dir: &Path, project_id: &str) -> Result<BookSettings, AppError> 
     let project = crate::storage::projects::get_project(&conn, project_id)?;
     let mut settings = conn.query_row(
         "SELECT COALESCE(translated_title,title), COALESCE(export_author,author,''),
-        export_publisher, export_description, COALESCE(source_language,''), target_language, translation_instructions, custom_cover
+        export_publisher, export_description, COALESCE(source_language,''), target_language, translation_instructions, custom_cover,
+        translation_skill_id, language_skill_id
         FROM projects WHERE id=?1", [project_id], |row| Ok(BookSettings {
             title: row.get(0)?, author: row.get(1)?, publisher: row.get::<_,Option<String>>(2)?.unwrap_or_default(),
             description: row.get::<_,Option<String>>(3)?.unwrap_or_default(), source_language: row.get(4)?,
             target_language: row.get(5)?, instructions: row.get(6)?, custom_cover: row.get(7)?,
+            genre_skill_id: row.get(8)?, language_skill_id: row.get(9)?,
         }))?;
     // Read original optional fields for the editor without changing import data.
     let mut archive = crate::epub::archive::SafeArchive::open(
@@ -97,14 +105,27 @@ pub fn save(data_dir: &Path, project_id: &str, settings: BookSettings) -> Result
         Some(validate_language_tag(&settings.source_language)?)
     };
     let target = validate_language_tag(&settings.target_language)?;
+    let genre_skill = crate::services::skills::validate_selection(
+        data_dir,
+        settings.genre_skill_id.as_deref(),
+        crate::services::skills::SkillKind::Genre,
+        &target,
+    )?;
+    let language_skill = crate::services::skills::validate_selection(
+        data_dir,
+        settings.language_skill_id.as_deref(),
+        crate::services::skills::SkillKind::Language,
+        &target,
+    )?;
     if let Some(cover) = &settings.custom_cover {
         crate::epub::rich_text::image_bytes(cover)?;
     }
     let mut conn = open_db(data_dir)?;
     let tx = crate::storage::begin_write(&mut conn)?;
     let changed = tx.execute("UPDATE projects SET translated_title=?1, export_author=?2, export_publisher=?3,
-        export_description=?4, source_language=?5, target_language=?6, translation_instructions=?7, updated_at=?8, custom_cover=?10 WHERE id=?9",
-        rusqlite::params![title, nonblank(&author), nonblank(&publisher), nonblank(&description), source, target, instructions, chrono::Utc::now().to_rfc3339(), project_id, settings.custom_cover])?;
+        export_description=?4, source_language=?5, target_language=?6, translation_instructions=?7, updated_at=?8, custom_cover=?10,
+        translation_skill_id=?11, language_skill_id=?12 WHERE id=?9",
+        rusqlite::params![title, nonblank(&author), nonblank(&publisher), nonblank(&description), source, target, instructions, chrono::Utc::now().to_rfc3339(), project_id, settings.custom_cover, genre_skill, language_skill])?;
     if changed == 0 {
         return Err(AppError::new(
             "project_not_found",

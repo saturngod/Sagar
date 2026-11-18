@@ -8,6 +8,7 @@ const paths = {
   languages: "M3 5h12M9 3v2M5 5c1 5 4 8 9 10M13 5c-1 5-4 8-9 10M14 21l4-10 4 10M16 17h4",
   grid: "M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm11 0h7v7h-7v-7Z",
   chevronDown: "M6 9l6 6 6-6",
+  chevronUp: "M6 15l6-6 6 6",
   paragraph: "M13 4h7M13 4v16M18 4v16M13 4H9a4 4 0 0 0 0 8h4",
   richText: "M5 3h10l4 4v14H5V3Zm10 0v4h4M8 11h8M8 15h8M8 18h5",
   sparkles:

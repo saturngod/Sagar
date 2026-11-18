@@ -20,6 +20,7 @@ import type {
 import { type AppearancePreferences, AppearanceSettings } from "./AppearanceSettings";
 import { ContentServerSettings } from "./ContentServerSettings";
 import { TranslationModelSection } from "./TranslationModelSection";
+import { TranslationSkillsSettings } from "./TranslationSkillsSettings";
 
 type AiSettingsDialogProps = {
   appearance: AppearancePreferences;
@@ -92,9 +93,9 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
   const [testResults, setTestResults] = useState<Record<string, CustomTestResult>>({});
   const [form, setForm] = useState<CustomFormState>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
-  const [tab, setTab] = useState<"appearance" | "providers" | "translation" | "server">(
-    "appearance",
-  );
+  const [tab, setTab] = useState<
+    "appearance" | "providers" | "translation" | "skills" | "server"
+  >("appearance");
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
@@ -487,7 +488,13 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
               return;
             }
             event.preventDefault();
-            const tabs = ["appearance", "providers", "translation", "server"] as const;
+            const tabs = [
+              "appearance",
+              "providers",
+              "translation",
+              "skills",
+              "server",
+            ] as const;
             const direction = event.key === "ArrowRight" ? 1 : -1;
             const next =
               tabs[(tabs.indexOf(tab) + direction + tabs.length) % tabs.length];
@@ -537,6 +544,19 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
           <button
             type="button"
             role="tab"
+            id="ai-tab-skills"
+            aria-selected={tab === "skills"}
+            aria-controls="ai-panel-skills"
+            tabIndex={tab === "skills" ? 0 : -1}
+            className="tab"
+            onClick={() => setTab("skills")}
+          >
+            <Icon name="book" />
+            {t("Translation skills")}
+          </button>
+          <button
+            type="button"
+            role="tab"
             id="ai-tab-server"
             aria-selected={tab === "server"}
             aria-controls="ai-panel-server"
@@ -556,6 +576,15 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
           hidden={tab !== "server"}
         >
           <ContentServerSettings enabled={tab === "server"} />
+        </div>
+
+        <div
+          role="tabpanel"
+          id="ai-panel-skills"
+          aria-labelledby="ai-tab-skills"
+          hidden={tab !== "skills"}
+        >
+          <TranslationSkillsSettings enabled={tab === "skills"} />
         </div>
 
         <div

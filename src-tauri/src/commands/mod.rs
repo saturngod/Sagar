@@ -468,6 +468,139 @@ pub async fn save_book_settings(
 }
 
 #[tauri::command]
+pub async fn list_translation_skills(
+    app: AppHandle,
+) -> Result<Vec<services::skills::SkillSummary>, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || Ok(services::skills::list(&data_dir))).await
+}
+
+#[tauri::command]
+pub async fn get_translation_skill(
+    app: AppHandle,
+    skill_id: String,
+) -> Result<services::skills::Skill, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || {
+        services::skills::get(&data_dir, skill_id.trim()).ok_or_else(|| {
+            AppError::new(
+                "skill_not_found",
+                "This translation skill is no longer available.",
+            )
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn get_translation_skill_source(
+    app: AppHandle,
+    skill_id: String,
+) -> Result<String, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || services::skills::source(&data_dir, skill_id.trim())).await
+}
+
+#[tauri::command]
+pub async fn import_translation_skill(
+    app: AppHandle,
+    path: String,
+    replace: bool,
+) -> Result<services::skills::SkillSummary, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || services::skills::import(&data_dir, std::path::Path::new(&path), replace))
+        .await
+}
+
+#[tauri::command]
+pub async fn save_translation_skill(
+    app: AppHandle,
+    skill_id: String,
+    text: String,
+) -> Result<services::skills::SkillSummary, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || services::skills::save(&data_dir, skill_id.trim(), &text)).await
+}
+
+#[tauri::command]
+pub async fn duplicate_translation_skill(
+    app: AppHandle,
+    skill_id: String,
+) -> Result<services::skills::SkillSummary, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || services::skills::duplicate(&data_dir, skill_id.trim())).await
+}
+
+#[tauri::command]
+pub async fn translation_skill_usage(app: AppHandle, skill_id: String) -> Result<usize, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || services::skills::usage(&data_dir, skill_id.trim())).await
+}
+
+/// Deletes an imported skill and removes its unchanged CLI installs. Returns
+/// the CLIs that still have a copy because it was changed outside Sagar.
+#[tauri::command]
+pub async fn delete_translation_skill(
+    app: AppHandle,
+    skill_id: String,
+) -> Result<Vec<String>, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || {
+        let id = skill_id.trim();
+        services::skills::delete(&data_dir, id)?;
+        Ok(match services::skill_install::Roots::current() {
+            Ok(roots) => services::skill_install::uninstall_everywhere(&data_dir, &roots, id),
+            Err(_) => Vec::new(),
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn list_skill_installs(
+    app: AppHandle,
+    skill_id: String,
+) -> Result<Vec<services::skill_install::SkillInstall>, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || {
+        let roots = services::skill_install::Roots::current()?;
+        let detected = services::ai::detected_clis();
+        services::skill_install::list(&data_dir, &roots, &detected, skill_id.trim())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn install_skill(
+    app: AppHandle,
+    skill_id: String,
+    provider_id: String,
+    force: bool,
+) -> Result<services::skill_install::InstallStatus, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || {
+        let roots = services::skill_install::Roots::current()?;
+        services::skill_install::install(&data_dir, &roots, skill_id.trim(), &provider_id, force)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn uninstall_skill(
+    app: AppHandle,
+    skill_id: String,
+    provider_id: String,
+    force: bool,
+) -> Result<services::skill_install::InstallStatus, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || {
+        let roots = services::skill_install::Roots::current()?;
+        services::skill_install::uninstall(&data_dir, &roots, skill_id.trim(), &provider_id, force)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn delete_ai_selection_run(
     app: AppHandle,
     chapter_id: String,

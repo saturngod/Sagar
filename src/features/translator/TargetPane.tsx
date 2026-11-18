@@ -8,6 +8,8 @@ import { formatChapterHtml } from "../../lib/html/format";
 import { useTranslation } from "../../lib/i18n";
 import { validateChapterHtml } from "../../lib/tauri/commands";
 import type { ChapterContent } from "../../types/chapter";
+import { PaneSearchBar, PaneSearchButton } from "../workspace/PaneSearchBar";
+import { usePaneSearch } from "../workspace/usePaneSearch";
 import { AiFixHtmlDialog } from "./AiFixHtmlDialog";
 import { AiGenerateDialog } from "./AiGenerateDialog";
 import { useAiJobs } from "./aiJobs";
@@ -94,6 +96,7 @@ export function TargetPane({
     [chapterId],
   );
   const [, refreshToolbar] = useState(0);
+  const [docTick, setDocTick] = useState(0);
   const [imageError, setImageError] = useState<string | null>(null);
   const [imagePicker, setImagePicker] = useState(false);
   const [fixConfirmOpen, setFixConfirmOpen] = useState(false);
@@ -118,7 +121,11 @@ export function TargetPane({
   const fileInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!activeEditor) return;
-    const update = () => refreshToolbar((value) => value + 1);
+    const update = ({ transaction }: { transaction: { docChanged: boolean } }) => {
+      refreshToolbar((value) => value + 1);
+      // Search matches follow every document change, including external ones.
+      if (transaction.docChanged) setDocTick((value) => value + 1);
+    };
     activeEditor.on("transaction", update);
     return () => {
       activeEditor.off("transaction", update);
@@ -138,6 +145,25 @@ export function TargetPane({
     !!activeEditor &&
     !activeEditor.isDestroyed &&
     activeEditor.isEditable;
+  const searchReady = !!content && !loading && !error;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new token whenever the searched text may have changed.
+  const searchRevision = useMemo(
+    () => ({}),
+    [activeEditor, chapterId, docTick, draftHtml, searchReady, view],
+  );
+  const search = usePaneSearch({
+    pane: "target",
+    available: searchReady && !immersive,
+    // The code view is searched through its highlighted mirror of the textarea.
+    getRoot: useCallback(
+      (pane: HTMLElement) =>
+        pane.querySelector<HTMLElement>(
+          view === "html" ? ".html-code-editor__highlight" : ".chapter-editor",
+        ),
+      [view],
+    ),
+    revision: searchRevision,
+  });
   const aiRunning = jobs.some(
     (job) => job.chapterId === chapterId && job.state === "running" && !job.foreground,
   );
@@ -241,6 +267,7 @@ export function TargetPane({
   }, [editor]);
   return (
     <section
+      ref={search.paneRef}
       className={`pane pane--target${immersive ? " pane--immersive" : ""}`}
       aria-labelledby={immersive ? undefined : "target-pane-heading"}
       aria-label={immersive ? t("Translation chapter content") : undefined}
@@ -280,6 +307,12 @@ export function TargetPane({
             <Icon name="code" />
           </button>
         </fieldset>
+        <PaneSearchButton
+          search={search}
+          label={t("Search translation")}
+          controls="target-pane-search"
+          disabled={!searchReady}
+        />
         <button
           type="button"
           className="icon-button"
@@ -366,6 +399,11 @@ export function TargetPane({
           <Icon name="expand" />
         </button>
       </div>
+      <PaneSearchBar
+        id="target-pane-search"
+        search={search}
+        label={t("Search translation")}
+      />
       <div
         id="translation-formatting"
         className="editor-toolbar"

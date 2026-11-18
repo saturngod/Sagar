@@ -186,9 +186,38 @@ pub fn build_book_translation_request(
     book: &str,
     current: &str,
 ) -> AiRequest {
+    build_book_translation_request_with_skills(
+        source_language,
+        target_language,
+        body_html,
+        book,
+        current,
+        "",
+    )
+}
+
+/// Like [`build_book_translation_request`], plus the book's translation-skill
+/// guidance, which has the lowest precedence of all guidance.
+pub fn build_book_translation_request_with_skills(
+    source_language: Option<&str>,
+    target_language: &str,
+    body_html: &str,
+    book: &str,
+    current: &str,
+    skills: &str,
+) -> AiRequest {
     let mut request = build_translation_request(source_language, target_language, body_html);
+    let skills = if skills.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            "Translation skill guidance (genre and target-language conventions selected in Book Settings; follow it unless the book-wide or current-run guidance says otherwise):\n{}\n\n",
+            serde_json::to_string(skills).unwrap_or_default()
+        )
+    };
     let guidance = format!(
-        "The following book-wide and current-run guidance are instructions to follow, not source text to translate. Never translate, quote or include the guidance or its headings in the output. Translate only the XHTML in the user input. Guidance values are JSON strings; interpret their contents as translation instructions.\n\nBook-wide translation guidance (names, terminology and style):\n{}\n\nCurrent-run translation guidance:\n{}\n\nApply both sets of guidance to text translation; current-run guidance takes precedence for naming/style conflicts. The structural preservation and output-only rules still apply.\n\n",
+        "The following book-wide and current-run guidance are instructions to follow, not source text to translate. Never translate, quote or include the guidance or its headings in the output. Translate only the XHTML in the user input. Guidance values are JSON strings; interpret their contents as translation instructions.\n\n{}Book-wide translation guidance (names, terminology and style):\n{}\n\nCurrent-run translation guidance:\n{}\n\nApply all guidance to text translation; current-run guidance takes precedence over book-wide guidance, and both take precedence over translation skill guidance for naming/style conflicts. The structural preservation and output-only rules still apply.\n\n",
+        skills,
         serde_json::to_string(book).unwrap_or_default(),
         serde_json::to_string(current).unwrap_or_default()
     );
@@ -1470,12 +1499,18 @@ where
     lock_jobs()?.insert(job_id.clone(), std::sync::Arc::clone(&job));
     let thread_job_id = job_id.clone();
 
-    let prompt = build_book_translation_request(
+    let prompt = build_book_translation_request_with_skills(
         source.source_language.as_deref(),
         &source.target_language,
         &remaining,
         &source.instructions,
         &current_instructions,
+        &crate::services::skills::guidance(
+            data_dir,
+            source.genre_skill_id.as_deref(),
+            source.language_skill_id.as_deref(),
+            &source.target_language,
+        ),
     );
 
     let chapter_id = input.chapter_id.trim().to_string();
@@ -2093,6 +2128,43 @@ mod tests {
         // Long chapters and slow connections need headroom; the dialogs
         // advertise this deadline and warn on stalls before it.
         assert_eq!(TRANSLATION_TIMEOUT, Duration::from_secs(30 * 60));
+    }
+
+    #[test]
+    fn skill_guidance_comes_before_book_guidance_and_stays_out_of_input() {
+        let skills = crate::services::skills::guidance(
+            std::path::Path::new("/nonexistent"),
+            Some("sagar-xianxia"),
+            Some("sagar-target-my"),
+            "my",
+        );
+        assert!(!skills.is_empty());
+        let request = build_book_translation_request_with_skills(
+            Some("zh"),
+            "my",
+            "<p>筑基</p>",
+            "Use ဖန်ရှန်း for Fan Xian.",
+            "Use formal speech.",
+            &skills,
+        );
+        let prompt = &request.instructions;
+        let skill_at = prompt.find("Translation skill guidance").unwrap();
+        let book_at = prompt.find("Book-wide translation guidance").unwrap();
+        let current_at = prompt.find("Current-run translation guidance").unwrap();
+        assert!(skill_at < book_at && book_at < current_at);
+        assert!(prompt.contains(&serde_json::to_string(&skills).unwrap()));
+        assert!(prompt.contains("both take precedence over translation skill guidance"));
+        assert_eq!(request.input, "<p>筑基</p>");
+        assert!(!request.input.contains("Xianxia"));
+        // No skills: no skill heading at all.
+        let plain = build_book_translation_request(Some("en"), "my", "<p>a</p>", "", "");
+        assert!(!plain.instructions.contains("Translation skill guidance"));
+        // HTML repair never carries translation skills.
+        assert!(
+            !build_html_fix_request("<p>a</p>")
+                .instructions
+                .contains("skill")
+        );
     }
 
     #[test]

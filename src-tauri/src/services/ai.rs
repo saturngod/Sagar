@@ -89,7 +89,7 @@ fn path_directories() -> Vec<PathBuf> {
 
 /// Home directory for per-user install lookups. Absolute paths only so a
 /// relative `HOME` can never escape into the search list.
-fn home_directory() -> Option<PathBuf> {
+pub(crate) fn home_directory() -> Option<PathBuf> {
     #[cfg(windows)]
     {
         std::env::var_os("USERPROFILE")
@@ -379,6 +379,15 @@ fn find_cli_binary_in(directories: &[PathBuf], id: CliProviderId) -> Option<Path
     id.binaries()
         .iter()
         .find_map(|binary| find_on_path_in(directories, binary))
+}
+
+/// CLIs whose binary is found, with one directory scan for all of them.
+pub(crate) fn detected_clis() -> Vec<CliProviderId> {
+    let directories = search_directories();
+    CliProviderId::all()
+        .into_iter()
+        .filter(|id| find_cli_binary_in(&directories, *id).is_some())
+        .collect()
 }
 
 pub(crate) fn find_cli_binary(id: CliProviderId) -> Option<PathBuf> {

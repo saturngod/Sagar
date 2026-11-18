@@ -251,6 +251,121 @@ export async function saveBookSettings(
   }
 }
 
+export async function listTranslationSkills(): Promise<
+  import("../../types/project").TranslationSkillSummary[]
+> {
+  try {
+    return await invoke("list_translation_skills");
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+export async function getTranslationSkill(
+  skillId: string,
+): Promise<import("../../types/project").TranslationSkill> {
+  try {
+    return await invoke("get_translation_skill", { skillId });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+
+/** Opens the native picker for a SKILL.md file; null on cancel. */
+export async function pickSkillFile(): Promise<string | null> {
+  try {
+    const selection = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Skill files", extensions: ["md"] }],
+    });
+    return typeof selection === "string" ? selection : null;
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+export async function getTranslationSkillSource(skillId: string): Promise<string> {
+  try {
+    return await invoke<string>("get_translation_skill_source", { skillId });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+export async function importTranslationSkill(
+  path: string,
+  replace: boolean,
+): Promise<import("../../types/project").TranslationSkillSummary> {
+  try {
+    return await invoke("import_translation_skill", { path, replace });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+export async function saveTranslationSkill(
+  skillId: string,
+  text: string,
+): Promise<import("../../types/project").TranslationSkillSummary> {
+  try {
+    return await invoke("save_translation_skill", { skillId, text });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+export async function duplicateTranslationSkill(
+  skillId: string,
+): Promise<import("../../types/project").TranslationSkillSummary> {
+  try {
+    return await invoke("duplicate_translation_skill", { skillId });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+export async function translationSkillUsage(skillId: string): Promise<number> {
+  try {
+    return await invoke<number>("translation_skill_usage", { skillId });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+/** Deletes an imported skill; returns CLIs that keep a changed copy. */
+export async function deleteTranslationSkill(skillId: string): Promise<string[]> {
+  try {
+    return await invoke<string[]>("delete_translation_skill", { skillId });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+export async function listSkillInstalls(
+  skillId: string,
+): Promise<import("../../types/project").SkillInstall[]> {
+  try {
+    return await invoke("list_skill_installs", { skillId });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+export async function installSkill(
+  skillId: string,
+  providerId: string,
+  force: boolean,
+): Promise<import("../../types/project").SkillInstallStatus> {
+  try {
+    return await invoke("install_skill", { skillId, providerId, force });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+export async function uninstallSkill(
+  skillId: string,
+  providerId: string,
+  force: boolean,
+): Promise<import("../../types/project").SkillInstallStatus> {
+  try {
+    return await invoke("uninstall_skill", { skillId, providerId, force });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+
 export async function listSystemFonts(): Promise<string[]> {
   try {
     return await invoke<string[]>("list_system_fonts");

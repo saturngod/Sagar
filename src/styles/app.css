@@ -871,8 +871,7 @@ button {
     max-height: calc(100dvh - 48px);
   }
 }
-.dialog--selection > .panel__header,
-.dialog--selection > .ai-mode {
+.dialog--selection > .panel__header {
   flex-shrink: 0;
 }
 .ai-selection {
@@ -2715,9 +2714,6 @@ button {
 .ai-selection__consent {
   flex-basis: 100%;
 }
-.ai-selection__consent .export-ack {
-  margin: 0;
-}
 
 /* Provider settings: compact tiles for detected tools, one-line rows for custom endpoints. */
 .provider-section {
@@ -3153,8 +3149,26 @@ button {
   gap: var(--space-1);
   overflow-wrap: anywhere;
 }
-.ai-generation__help {
-  margin: 0;
+/* Mode tabs and the active model share one row to keep the workflow compact. */
+.ai-generation__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  border-bottom: var(--border-subtle);
+  padding-bottom: var(--space-2);
+}
+.ai-generation__bar .ai-mode {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.ai-generation__bar .ai-config-summary {
+  justify-content: flex-end;
+  min-width: 0;
 }
 .ai-generation__start {
   display: flex;
@@ -3229,6 +3243,38 @@ button {
 }
 .ai-selection__batch-actions {
   order: 1;
+}
+/* Run instructions stay pinned above consent and the primary action, so they
+   are visible without scrolling past the source list. Their own height is
+   capped so the primary action never leaves the dialog. */
+.ai-selection__instructions {
+  flex-basis: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+/* One line until the translator types; grows with the text where supported
+   and stays manually resizable elsewhere. */
+.ai-selection__instructions textarea {
+  width: 100%;
+  min-height: var(--control-height);
+  max-height: 88px;
+  padding: var(--space-2) 12px;
+  border: var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  resize: vertical;
+  field-sizing: content;
+}
+/* Short windows: give the source list the height the pinned footer uses. */
+@media (max-height: 760px) {
+  .dialog--selection {
+    height: calc(100dvh - 32px);
+  }
 }
 
 .language-dialog__form {
@@ -4005,4 +4051,189 @@ button {
 
 .sharing-feedback:empty {
   display: none;
+}
+
+/* In-pane search bar: a third row shown only while searching. */
+.pane-search {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: 4px 12px 4px 20px;
+  border-bottom: var(--border-subtle);
+  color: var(--color-text-muted);
+}
+.pane-search__input {
+  flex: 1;
+  min-width: 0;
+  height: var(--control-height);
+  margin-inline-end: 4px;
+  padding: 0 8px;
+  border: var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+.pane-search__count {
+  flex: none;
+  min-width: 44px;
+  padding-inline: 4px;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+.pane-search__count--empty {
+  color: var(--color-error);
+}
+/* Literal colors: custom properties are unreliable inside ::highlight(). */
+::highlight(sagar-search) {
+  background-color: #ffe27a;
+  color: #1c2430;
+}
+::highlight(sagar-search-current) {
+  background-color: #ff9a3c;
+  color: #1c2430;
+}
+
+/* Book Settings → translation skills */
+.book-settings__skills {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+.book-settings__skills > .dialog__muted {
+  margin: 0;
+}
+.book-settings__section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.skill-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.skill-picker__detail {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.skill-picker__rules {
+  margin: 0;
+}
+.skill-picker__body {
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+}
+
+/* Settings → Translation skills */
+.skills-settings__help {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+}
+.skills-settings__details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.skills-settings__description {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.skills-settings__source,
+.skills-settings__editor {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, monospace, var(--font-book);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.skills-settings__editor {
+  height: 260px;
+  resize: vertical;
+}
+
+/* Settings → Translation skills → Install in coding CLIs */
+.skill-installs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: var(--border-subtle);
+}
+.skill-installs__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.skill-installs__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.skill-installs__help,
+.skill-installs__note {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.skill-installs__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.skill-installs__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-1) 0;
+}
+.skill-installs__row + .skill-installs__row {
+  border-top: var(--border-subtle);
+}
+.skill-installs__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.skill-installs__folder {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.skill-installs__actions {
+  display: flex;
+  gap: var(--space-1);
+  min-width: 34px;
+}
+.skill-installs__note {
+  grid-column: 1 / -1;
 }

@@ -329,4 +329,87 @@ export const ja: Record<string, string> = {
   "Language tag": "言語タグ",
   "Language details": "言語の詳細",
   "Used for translation and export.": "翻訳と書き出しに使用します。",
+  "Search original": "原文を検索",
+  "Search translation": "訳文を検索",
+  "Search…": "検索…",
+  "Previous match": "前の一致",
+  "Next match": "次の一致",
+  "Close search": "検索を閉じる",
+  "No results": "結果なし",
+  "Translation skills": "翻訳スキル",
+  "Loading translation skills…": "翻訳スキルを読み込み中…",
+  "Skill rules are sent with every AI translation in this book. The book and current-run instructions take precedence when they conflict.":
+    "スキルのルールは、この本のすべての AI 翻訳と一緒に送信されます。矛盾する場合は、本の指示と今回の指示が優先されます。",
+  "Genre skill": "ジャンルスキル",
+  "Language skill": "言語スキル",
+  None: "なし",
+  "Unavailable skill": "利用できないスキル",
+  "This skill is no longer available. Choose another skill or None.":
+    "このスキルは利用できなくなりました。別のスキルか「なし」を選んでください。",
+  "This language skill doesn't match the translation language. Choose another skill or None.":
+    "この言語スキルは翻訳先の言語と一致しません。別のスキルか「なし」を選んでください。",
+  "No language skill is available for this translation language yet.":
+    "この翻訳先の言語に使える言語スキルはまだありません。",
+  "Choose the kind of book to apply its translation rules.":
+    "翻訳ルールを適用する本の種類を選んでください。",
+  "Choose rules for writing the translation language.":
+    "翻訳先の言語で書くためのルールを選んでください。",
+  "Skill rules": "スキルのルール",
+  "Loading skill rules…": "スキルのルールを読み込み中…",
+  Fiction: "フィクション",
+  "Non-Fiction": "ノンフィクション",
+  "Biography & Memoir": "伝記・回想録",
+  "Craft & Career Guides": "技術・キャリアガイド",
+  "Academic & Translation Studies": "学術・翻訳研究",
+  "Translated Literature": "翻訳文学",
+  "Children & Young Adult": "児童書・ヤングアダルト",
+  "Wuxia 武侠": "武侠",
+  "Xianxia 仙侠": "仙侠",
+  "Xuanhuan 玄幻": "玄幻",
+  "Danmei 耽美": "耽美",
+  Myanmar: "ミャンマー語",
+  "Import skill": "スキルを読み込む",
+  "Importing…": "読み込み中…",
+  "Skills add translation rules for a kind of book or a translation language. Choose them per book in Book Settings. Built-in skills can't be changed; duplicate one to make your own version. Imported skills are saved on this computer.":
+    "スキルは、本の種類や翻訳先の言語に合わせた翻訳ルールを追加します。本ごとに書籍の設定で選びます。組み込みスキルは変更できません。複製して自分用のバージョンを作成してください。読み込んだスキルはこのコンピューターに保存されます。",
+  "A skill with this name already exists. Replace it?":
+    "同じ名前のスキルがすでにあります。置き換えますか？",
+  Replace: "置き換える",
+  Imported: "読み込み済み",
+  Created: "作成済み",
+  Deleted: "削除済み",
+  Genre: "ジャンル",
+  "Built-in": "組み込み",
+  Duplicate: "複製",
+  "Skill details": "スキルの詳細",
+  "Skill file (SKILL.md)": "スキルファイル (SKILL.md)",
+  "Delete skill?": "スキルを削除しますか？",
+  "Books that use it will go back to no skill:":
+    "このスキルを使う本はスキルなしに戻ります：",
+  "Not installed": "未インストール",
+  Installed: "インストール済み",
+  "Update available": "更新あり",
+  "Changed outside Sagar": "Sagar 以外で変更済み",
+  "Not Sagar's folder": "Sagar のフォルダーではありません",
+  "Checking coding CLIs…": "コーディング CLI を確認中…",
+  "Install in coding CLIs": "コーディング CLI にインストール",
+  "Installing…": "インストール中…",
+  "Install in all found CLIs": "見つかったすべての CLI にインストール",
+  "Copies this skill into each CLI's own skills folder, so you can use it outside Sagar too. Sagar's own translations don't need this. Sagar only changes folders it installed.":
+    "このスキルを各 CLI のスキルフォルダーにコピーし、Sagar 以外でも使えるようにします。Sagar 自身の翻訳には不要です。Sagar は自分がインストールしたフォルダーだけを変更します。",
+  Update: "更新",
+  Install: "インストール",
+  "Replace with Sagar's version": "Sagar の版で置き換える",
+  Uninstall: "アンインストール",
+  "A folder with this name is already there and wasn't installed by Sagar, so Sagar won't change it.":
+    "同じ名前のフォルダーがすでにあり、Sagar がインストールしたものではないため、Sagar は変更しません。",
+  "Replace the changed copy with Sagar's version? Changes made outside Sagar will be lost.":
+    "変更されたコピーを Sagar の版で置き換えますか？ Sagar 以外で行った変更は失われます。",
+  "Uninstall the changed copy? Changes made outside Sagar will be lost.":
+    "変更されたコピーをアンインストールしますか？ Sagar 以外で行った変更は失われます。",
+  "OpenCode also reads the Claude Code and Codex skill folders, so this skill may appear twice in OpenCode.":
+    "OpenCode は Claude Code と Codex のスキルフォルダーも読み込むため、このスキルが OpenCode に 2 回表示されることがあります。",
+  "A changed copy was kept in:": "変更されたコピーを残しました：",
+  "Copies Sagar installed in coding CLIs are removed too.":
+    "Sagar がコーディング CLI にインストールしたコピーも削除されます。",
 };

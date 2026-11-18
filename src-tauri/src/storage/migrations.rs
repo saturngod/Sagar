@@ -166,6 +166,11 @@ const MIGRATIONS: &[(i64, &str)] = &[
       CREATE INDEX ai_selection_parts_item ON ai_selection_parts(item_id,part_order);"),
     (11, "ALTER TABLE ai_selection_runs ADD COLUMN deleted_at TEXT;"),
     (12, "ALTER TABLE ai_custom_providers ADD COLUMN protocol TEXT NOT NULL DEFAULT 'openai' CHECK(protocol IN ('openai', 'gemini', 'anthropic'));"),
+    (
+        13,
+        "ALTER TABLE projects ADD COLUMN translation_skill_id TEXT;
+         ALTER TABLE projects ADD COLUMN language_skill_id TEXT;",
+    ),
 ];
 
 /// Highest defined schema version. Currently asserted on by tests; production
@@ -291,5 +296,32 @@ mod source_path_upgrade_tests {
             .unwrap();
         assert_eq!(title, "Existing book");
         assert_eq!(path, None);
+    }
+}
+
+#[cfg(test)]
+mod translation_skill_upgrade_tests {
+    use super::*;
+
+    #[test]
+    fn v13_keeps_existing_books_and_starts_without_skills() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (version, sql) in MIGRATIONS.iter().filter(|(version, _)| *version <= 12) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", version).unwrap();
+        }
+        conn.execute("INSERT INTO projects(id, source_sha256, source_snapshot_path, title, created_at, updated_at, translation_instructions) VALUES('old','hash','projects/old/source.epub','Existing book','now','now','Keep names')", []).unwrap();
+        assert_eq!(apply(&mut conn).unwrap(), latest_version());
+        let row: (String, String, Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT title, translation_instructions, translation_skill_id, language_skill_id FROM projects WHERE id='old'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            row,
+            ("Existing book".into(), "Keep names".into(), None, None)
+        );
     }
 }

@@ -496,4 +496,87 @@ export const my: Record<string, string> = {
   "Language tag": "ဘာသာစကားကုဒ်",
   "Language details": "ဘာသာစကား အသေးစိတ်",
   "Used for translation and export.": "ဘာသာပြန်ခြင်းနှင့် ထုတ်ယူခြင်းအတွက် သုံးပါသည်။",
+  "Search original": "မူရင်းတွင် ရှာရန်",
+  "Search translation": "ဘာသာပြန်စာတွင် ရှာရန်",
+  "Search…": "ရှာရန်…",
+  "Previous match": "ရှေ့ တွေ့ရှိချက်",
+  "Next match": "နောက် တွေ့ရှိချက်",
+  "Close search": "ရှာဖွေမှု ပိတ်ရန်",
+  "No results": "ရလဒ် မရှိပါ",
+  "Translation skills": "ဘာသာပြန် စွမ်းရည်များ",
+  "Loading translation skills…": "ဘာသာပြန် စွမ်းရည်များ တင်နေသည်…",
+  "Skill rules are sent with every AI translation in this book. The book and current-run instructions take precedence when they conflict.":
+    "စွမ်းရည် စည်းမျဉ်းများကို ဤစာအုပ်၏ AI ဘာသာပြန်တိုင်းနှင့်အတူ ပို့ပါသည်။ ကွဲလွဲပါက စာအုပ်နှင့် ဤအကြိမ် ညွှန်ကြားချက်များကို ဦးစားပေးပါသည်။",
+  "Genre skill": "စာပေအမျိုးအစား စွမ်းရည်",
+  "Language skill": "ဘာသာစကား စွမ်းရည်",
+  None: "မရွေးပါ",
+  "Unavailable skill": "မရနိုင်သော စွမ်းရည်",
+  "This skill is no longer available. Choose another skill or None.":
+    "ဤစွမ်းရည်ကို မရနိုင်တော့ပါ။ အခြားစွမ်းရည် သို့မဟုတ် မရွေးပါ ကို ရွေးပါ။",
+  "This language skill doesn't match the translation language. Choose another skill or None.":
+    "ဤဘာသာစကား စွမ်းရည်သည် ဘာသာပြန်ဆိုမည့် ဘာသာစကားနှင့် မကိုက်ညီပါ။ အခြားစွမ်းရည် သို့မဟုတ် မရွေးပါ ကို ရွေးပါ။",
+  "No language skill is available for this translation language yet.":
+    "ဤဘာသာပြန်ဆိုမည့် ဘာသာစကားအတွက် ဘာသာစကား စွမ်းရည် မရှိသေးပါ။",
+  "Choose the kind of book to apply its translation rules.":
+    "ဘာသာပြန် စည်းမျဉ်းများ အသုံးပြုရန် စာအုပ်အမျိုးအစားကို ရွေးပါ။",
+  "Choose rules for writing the translation language.":
+    "ဘာသာပြန်ဆိုမည့် ဘာသာစကားဖြင့် ရေးသားရန် စည်းမျဉ်းများကို ရွေးပါ။",
+  "Skill rules": "စွမ်းရည် စည်းမျဉ်းများ",
+  "Loading skill rules…": "စွမ်းရည် စည်းမျဉ်းများ တင်နေသည်…",
+  Fiction: "ဝတ္ထု",
+  "Non-Fiction": "ဝတ္ထုမဟုတ်သော စာပေ",
+  "Biography & Memoir": "အတ္ထုပ္ပတ္တိနှင့် ကိုယ်တွေ့မှတ်တမ်း",
+  "Craft & Career Guides": "လက်မှုပညာနှင့် အသက်မွေးဝမ်းကျောင်း လမ်းညွှန်",
+  "Academic & Translation Studies": "ပညာရပ်ဆိုင်ရာနှင့် ဘာသာပြန် လေ့လာရေး",
+  "Translated Literature": "ဘာသာပြန် စာပေ",
+  "Children & Young Adult": "ကလေးနှင့် လူငယ်စာပေ",
+  "Wuxia 武侠": "ဝူရှား 武侠",
+  "Xianxia 仙侠": "ရှန်းရှား 仙侠",
+  "Xuanhuan 玄幻": "ရွှမ်ဟွမ် 玄幻",
+  "Danmei 耽美": "တန်မေ့ 耽美",
+  Myanmar: "မြန်မာ",
+  "Import skill": "စွမ်းရည် ထည့်သွင်းရန်",
+  "Importing…": "ထည့်သွင်းနေသည်…",
+  "Skills add translation rules for a kind of book or a translation language. Choose them per book in Book Settings. Built-in skills can't be changed; duplicate one to make your own version. Imported skills are saved on this computer.":
+    "စွမ်းရည်များသည် စာအုပ်အမျိုးအစား သို့မဟုတ် ဘာသာပြန်ဆိုမည့် ဘာသာစကားအတွက် ဘာသာပြန် စည်းမျဉ်းများ ထပ်ထည့်ပေးပါသည်။ စာအုပ်တစ်အုပ်ချင်းစီအတွက် စာအုပ် ဆက်တင်များတွင် ရွေးပါ။ မူလပါ စွမ်းရည်များကို ပြင်၍မရပါ၊ ကိုယ်ပိုင်ဗားရှင်း ပြုလုပ်ရန် မိတ္တူကူးပါ။ ထည့်သွင်းထားသော စွမ်းရည်များကို ဤကွန်ပျူတာတွင် သိမ်းဆည်းထားပါသည်။",
+  "A skill with this name already exists. Replace it?":
+    "ဤအမည်ဖြင့် စွမ်းရည် ရှိပြီးဖြစ်သည်။ အစားထိုးမလား။",
+  Replace: "အစားထိုးရန်",
+  Imported: "ထည့်သွင်းပြီး",
+  Created: "ပြုလုပ်ပြီး",
+  Deleted: "ဖျက်ပြီး",
+  Genre: "အမျိုးအစား",
+  "Built-in": "မူလပါ",
+  Duplicate: "မိတ္တူကူးရန်",
+  "Skill details": "စွမ်းရည် အသေးစိတ်",
+  "Skill file (SKILL.md)": "စွမ်းရည် ဖိုင် (SKILL.md)",
+  "Delete skill?": "စွမ်းရည်ကို ဖျက်မလား။",
+  "Books that use it will go back to no skill:":
+    "၎င်းကို အသုံးပြုသော စာအုပ်များသည် စွမ်းရည်မရွေးထားသည့် အခြေအနေသို့ ပြန်သွားပါမည်:",
+  "Not installed": "မထည့်သွင်းရသေးပါ",
+  Installed: "ထည့်သွင်းပြီး",
+  "Update available": "အပ်ဒိတ် ရနိုင်သည်",
+  "Changed outside Sagar": "Sagar အပြင်ဘက်တွင် ပြောင်းထားသည်",
+  "Not Sagar's folder": "Sagar ၏ ဖိုင်တွဲ မဟုတ်ပါ",
+  "Checking coding CLIs…": "ကုဒ်ရေး CLI များကို စစ်ဆေးနေသည်…",
+  "Install in coding CLIs": "ကုဒ်ရေး CLI များတွင် ထည့်သွင်းရန်",
+  "Installing…": "ထည့်သွင်းနေသည်…",
+  "Install in all found CLIs": "တွေ့ရှိသော CLI အားလုံးတွင် ထည့်သွင်းရန်",
+  "Copies this skill into each CLI's own skills folder, so you can use it outside Sagar too. Sagar's own translations don't need this. Sagar only changes folders it installed.":
+    "ဤစွမ်းရည်ကို CLI တစ်ခုချင်းစီ၏ စွမ်းရည် ဖိုင်တွဲထဲသို့ ကူးထည့်ပေးသဖြင့် Sagar အပြင်ဘက်တွင်လည်း အသုံးပြုနိုင်ပါသည်။ Sagar ၏ ဘာသာပြန်များအတွက် ဤအဆင့် မလိုအပ်ပါ။ Sagar သည် ၎င်းထည့်သွင်းထားသော ဖိုင်တွဲများကိုသာ ပြောင်းလဲပါသည်။",
+  Update: "အပ်ဒိတ်လုပ်ရန်",
+  Install: "ထည့်သွင်းရန်",
+  "Replace with Sagar's version": "Sagar ၏ ဗားရှင်းဖြင့် အစားထိုးရန်",
+  Uninstall: "ဖယ်ရှားရန်",
+  "A folder with this name is already there and wasn't installed by Sagar, so Sagar won't change it.":
+    "ဤအမည်ဖြင့် ဖိုင်တွဲတစ်ခု ရှိပြီးဖြစ်ပြီး Sagar က ထည့်သွင်းထားခြင်း မဟုတ်သဖြင့် Sagar က ပြောင်းလဲမည် မဟုတ်ပါ။",
+  "Replace the changed copy with Sagar's version? Changes made outside Sagar will be lost.":
+    "ပြောင်းထားသော မိတ္တူကို Sagar ၏ ဗားရှင်းဖြင့် အစားထိုးမလား။ Sagar အပြင်ဘက်တွင် ပြုလုပ်ထားသော ပြောင်းလဲမှုများ ပျောက်သွားပါမည်။",
+  "Uninstall the changed copy? Changes made outside Sagar will be lost.":
+    "ပြောင်းထားသော မိတ္တူကို ဖယ်ရှားမလား။ Sagar အပြင်ဘက်တွင် ပြုလုပ်ထားသော ပြောင်းလဲမှုများ ပျောက်သွားပါမည်။",
+  "OpenCode also reads the Claude Code and Codex skill folders, so this skill may appear twice in OpenCode.":
+    "OpenCode သည် Claude Code နှင့် Codex ၏ စွမ်းရည် ဖိုင်တွဲများကိုလည်း ဖတ်သဖြင့် ဤစွမ်းရည်ကို OpenCode တွင် နှစ်ကြိမ် တွေ့ရနိုင်ပါသည်။",
+  "A changed copy was kept in:": "ပြောင်းထားသော မိတ္တူကို ထားရှိခဲ့သည်:",
+  "Copies Sagar installed in coding CLIs are removed too.":
+    "ကုဒ်ရေး CLI များတွင် Sagar ထည့်သွင်းထားသော မိတ္တူများကိုလည်း ဖယ်ရှားပါမည်။",
 };
