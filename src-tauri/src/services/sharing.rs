@@ -27,6 +27,9 @@ const CALLBACK_PORT: u16 = 53142;
 const HTML_FORMAT: u64 = 2;
 /// Longest wait honored from a rate-limit `Retry-After` header.
 const MAX_RETRY_AFTER: Duration = Duration::from_secs(60);
+/// How long a request waits for another SagarNet request to finish. Covers
+/// one Upload all chapter (three 20 s requests plus a rate-limit wait).
+const LOCK_WAIT: Duration = Duration::from_secs(150);
 /// SagarNet pages chapters 100 at a time and allows up to 5,000.
 const MAX_CHAPTER_PAGES: u32 = 50;
 
@@ -1116,9 +1119,11 @@ pub async fn request(
     }
     let origin = settings.origin()?;
     let client = client()?;
-    let mut session = state
-        .account
-        .try_lock()
+    // Requests share one session (and token refresh), so they run one at a
+    // time. Wait for the current one, such as a background book match or a
+    // chapter of Upload all, instead of failing straight away.
+    let mut session = tokio::time::timeout(LOCK_WAIT, state.account.lock())
+        .await
         .map_err(|_| failure("Another SagarNet operation is in progress."))?;
     let token = if settings.client_id.is_empty() || matches!(operation, Operation::Languages) {
         None
