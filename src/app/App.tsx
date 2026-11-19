@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { LibraryScreen } from "../features/library/LibraryScreen";
 import { AiJobsProvider } from "../features/translator/aiJobs";
+import { UpdateBanner } from "../features/updates/UpdateControls";
 import { WorkspaceFrame } from "../features/workspace/WorkspaceFrame";
 import { useTranslation } from "../lib/i18n";
 import {
@@ -125,6 +126,7 @@ export default function App() {
           Sagar <span className="app-brand__descriptor">{t("Translation studio")}</span>
         </div>
       </div>
+      <UpdateBanner />
       <LibraryScreen
         appearance={{
           fonts,

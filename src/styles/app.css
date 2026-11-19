@@ -4750,3 +4750,67 @@ button {
     grid-template-rows: minmax(0, 140px) minmax(0, 1fr);
   }
 }
+
+/* App updates (Settings → Updates and the library banner) */
+
+.update-settings {
+  display: grid;
+  gap: var(--space-3);
+}
+.update-settings__text {
+  margin: 0;
+}
+.update-settings__notes p {
+  margin: var(--space-2) 0 0;
+  white-space: pre-wrap;
+  font-size: var(--text-sm);
+}
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.update-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+.update-progress {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 200px;
+  font-size: var(--text-sm);
+}
+.update-progress__bar {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--color-accent);
+}
+.update-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) 28px;
+  border-bottom: 1px solid var(--color-info-border);
+  background: var(--color-info-bg);
+  color: var(--color-text);
+}
+.update-banner__icon {
+  display: inline-flex;
+  color: var(--color-info);
+  flex-shrink: 0;
+}
+.update-banner--error {
+  border-bottom-color: var(--color-error-border);
+  background: var(--color-error-bg);
+}
+.update-banner--error .update-banner__icon {
+  color: var(--color-error);
+}
+.update-banner__text {
+  margin: 0;
+  margin-right: auto;
+  font-size: var(--text-sm);
+}

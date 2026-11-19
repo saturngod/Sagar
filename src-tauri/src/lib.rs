@@ -129,6 +129,15 @@ pub fn run() {
         .manage(services::content_server::ContentServer::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .setup(|app| {
+            // Signed self-updates from GitHub releases; checks only run when
+            // the user allows them in Settings → Updates.
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+            Ok(())
+        })
         .register_uri_scheme_protocol("epubres", |ctx, request| {
             serve_epub_resource(ctx.app_handle(), request)
         })

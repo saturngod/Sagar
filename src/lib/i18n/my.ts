@@ -581,4 +581,32 @@ export const my: Record<string, string> = {
     "ကုဒ်ရေး CLI များတွင် Sagar ထည့်သွင်းထားသော မိတ္တူများကိုလည်း ဖယ်ရှားပါမည်။",
   Skills: "စွမ်းရည်များ",
   Server: "ဆာဗာ",
+  Updates: "အပ်ဒိတ်များ",
+  "App updates": "အက်ပ် အပ်ဒိတ်များ",
+  "App update": "အက်ပ် အပ်ဒိတ်",
+  "Check for updates": "အပ်ဒိတ် စစ်ရန်",
+  "Current version": "လက်ရှိဗားရှင်း",
+  "Sagar is up to date.": "Sagar သည် နောက်ဆုံးဗားရှင်း ဖြစ်ပါသည်။",
+  "Version {version} is available.": "ဗားရှင်း {version} ရနိုင်ပါပြီ။",
+  "Sagar {version} is available.": "Sagar {version} ရနိုင်ပါပြီ။",
+  "Version {version} is installed. Restart Sagar to use it.":
+    "ဗားရှင်း {version} ကို ထည့်သွင်းပြီးပါပြီ။ အသုံးပြုရန် Sagar ကို ပြန်ဖွင့်ပါ။",
+  "What’s new": "အသစ်များ",
+  "Update now": "ယခု အပ်ဒိတ်လုပ်ရန်",
+  "Restart now": "ယခု ပြန်ဖွင့်ရန်",
+  "Release notes": "ထုတ်ဝေမှု မှတ်စု",
+  "Open release page": "ထုတ်ဝေမှု စာမျက်နှာ ဖွင့်ရန်",
+  "Downloading…": "ဒေါင်းလုဒ်လုပ်နေသည်…",
+  "Download progress": "ဒေါင်းလုဒ် တိုးတက်မှု",
+  Later: "နောက်မှ",
+  "Hide update notice": "အပ်ဒိတ် အသိပေးချက် ဖျောက်ရန်",
+  "Check for updates when Sagar opens": "Sagar ဖွင့်ချိန်တွင် အပ်ဒိတ် စစ်ရန်",
+  "Sagar only contacts GitHub to look for a new version. No books or translations are sent. Updates are signature-checked before they install.":
+    "ဗားရှင်းအသစ် ရှာရန်အတွက်သာ Sagar က GitHub သို့ ဆက်သွယ်ပါသည်။ စာအုပ်များ သို့မဟုတ် ဘာသာပြန်များ မပို့ပါ။ အပ်ဒိတ်များကို မထည့်သွင်းမီ လက်မှတ် စစ်ဆေးပါသည်။",
+  "Couldn’t check for updates. Check your internet connection, then retry.":
+    "အပ်ဒိတ် စစ်၍ မရပါ။ အင်တာနက် ချိတ်ဆက်မှုကို စစ်ပြီး ထပ်ကြိုးစားပါ။",
+  "The update couldn’t be installed. Retry, or download it from the release page.":
+    "အပ်ဒိတ်ကို ထည့်သွင်း၍ မရပါ။ ထပ်ကြိုးစားပါ သို့မဟုတ် ထုတ်ဝေမှု စာမျက်နှာမှ ဒေါင်းလုဒ်လုပ်ပါ။",
+  "The update is installed. Quit and reopen Sagar to finish.":
+    "အပ်ဒိတ် ထည့်သွင်းပြီးပါပြီ။ ပြီးဆုံးရန် Sagar ကို ပိတ်ပြီး ပြန်ဖွင့်ပါ။",
 };

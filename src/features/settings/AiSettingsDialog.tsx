@@ -17,6 +17,7 @@ import type {
   CustomProviderSummary,
   CustomTestResult,
 } from "../../types/ai";
+import { UpdateSettings } from "../updates/UpdateControls";
 import { type AppearancePreferences, AppearanceSettings } from "./AppearanceSettings";
 import { ContentServerSettings } from "./ContentServerSettings";
 import { TranslationModelSection } from "./TranslationModelSection";
@@ -94,7 +95,7 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
   const [form, setForm] = useState<CustomFormState>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
   const [tab, setTab] = useState<
-    "appearance" | "providers" | "translation" | "skills" | "server"
+    "appearance" | "providers" | "translation" | "skills" | "server" | "updates"
   >("appearance");
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -494,6 +495,7 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
               "translation",
               "skills",
               "server",
+              "updates",
             ] as const;
             const direction = event.key === "ArrowRight" ? 1 : -1;
             const next =
@@ -570,6 +572,29 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
             <Icon name="server" />
             {t("Server")}
           </button>
+          <button
+            type="button"
+            role="tab"
+            id="ai-tab-updates"
+            aria-selected={tab === "updates"}
+            aria-controls="ai-panel-updates"
+            tabIndex={tab === "updates" ? 0 : -1}
+            className="tab"
+            onClick={() => setTab("updates")}
+            title={t("App updates")}
+          >
+            <Icon name="download" />
+            {t("Updates")}
+          </button>
+        </div>
+
+        <div
+          role="tabpanel"
+          id="ai-panel-updates"
+          aria-labelledby="ai-tab-updates"
+          hidden={tab !== "updates"}
+        >
+          <UpdateSettings />
         </div>
 
         <div

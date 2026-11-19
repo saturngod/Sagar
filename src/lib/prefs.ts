@@ -14,6 +14,7 @@ const KEYS = {
   sidebarWidth: "sagar.sidebarWidth",
   sourceWidth: "sagar.sourceWidth",
   scrollSync: "sagar.scrollSync",
+  autoUpdateCheck: "sagar.autoUpdateCheck",
 } as const;
 
 function read(key: string): string | null {
@@ -121,4 +122,13 @@ export function fontStack(family: string, fallback: string): string {
     .replace(/"/g, '\\"')
     .replace(/[\n\r\f]/g, " ");
   return family ? `"${quoted}", ${fallback}` : fallback;
+}
+
+/** Whether Sagar checks GitHub for a new version on launch (default on). */
+export function loadAutoUpdateCheck(): boolean {
+  return read(KEYS.autoUpdateCheck) !== "0";
+}
+
+export function saveAutoUpdateCheck(enabled: boolean): void {
+  write(KEYS.autoUpdateCheck, enabled ? "1" : "0");
 }
