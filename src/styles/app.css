@@ -4814,3 +4814,28 @@ button {
   margin-right: auto;
   font-size: var(--text-sm);
 }
+
+/* Book Settings → translate all untranslated chapters */
+.book-settings__batch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+.book-settings__batch-delay {
+  width: 14rem;
+  max-width: 100%;
+}
+.book-settings__batch-count {
+  margin: 0 0 var(--space-2);
+}
+.book-settings__batch-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.book-settings__batch-status > :first-child {
+  flex: 1;
+  min-width: 0;
+}

@@ -21,6 +21,16 @@ pub struct BookSettings {
     /// Selected target-language translation skill.
     #[serde(default)]
     pub language_skill_id: Option<String>,
+    /// Pause between chapters when translating all untranslated chapters.
+    #[serde(default = "default_batch_delay")]
+    pub batch_delay_secs: u32,
+}
+
+/// Longest pause allowed between batch chapters (one hour).
+pub const MAX_BATCH_DELAY_SECS: u32 = 3600;
+
+fn default_batch_delay() -> u32 {
+    10
 }
 
 fn checked(value: &str, name: &str, limit: usize) -> Result<String, AppError> {
@@ -50,12 +60,13 @@ pub fn get(data_dir: &Path, project_id: &str) -> Result<BookSettings, AppError> 
     let mut settings = conn.query_row(
         "SELECT COALESCE(translated_title,title), COALESCE(export_author,author,''),
         export_publisher, export_description, COALESCE(source_language,''), target_language, translation_instructions, custom_cover,
-        translation_skill_id, language_skill_id
+        translation_skill_id, language_skill_id, batch_delay_secs
         FROM projects WHERE id=?1", [project_id], |row| Ok(BookSettings {
             title: row.get(0)?, author: row.get(1)?, publisher: row.get::<_,Option<String>>(2)?.unwrap_or_default(),
             description: row.get::<_,Option<String>>(3)?.unwrap_or_default(), source_language: row.get(4)?,
             target_language: row.get(5)?, instructions: row.get(6)?, custom_cover: row.get(7)?,
             genre_skill_id: row.get(8)?, language_skill_id: row.get(9)?,
+            batch_delay_secs: row.get::<_, i64>(10)?.clamp(0, MAX_BATCH_DELAY_SECS as i64) as u32,
         }))?;
     // Read original optional fields for the editor without changing import data.
     let mut archive = crate::epub::archive::SafeArchive::open(
@@ -117,6 +128,12 @@ pub fn save(data_dir: &Path, project_id: &str, settings: BookSettings) -> Result
         crate::services::skills::SkillKind::Language,
         &target,
     )?;
+    if settings.batch_delay_secs > MAX_BATCH_DELAY_SECS {
+        return Err(AppError::new(
+            "invalid_book_settings",
+            format!("Enter a pause between 0 and {MAX_BATCH_DELAY_SECS} seconds."),
+        ));
+    }
     if let Some(cover) = &settings.custom_cover {
         crate::epub::rich_text::image_bytes(cover)?;
     }
@@ -124,8 +141,8 @@ pub fn save(data_dir: &Path, project_id: &str, settings: BookSettings) -> Result
     let tx = crate::storage::begin_write(&mut conn)?;
     let changed = tx.execute("UPDATE projects SET translated_title=?1, export_author=?2, export_publisher=?3,
         export_description=?4, source_language=?5, target_language=?6, translation_instructions=?7, updated_at=?8, custom_cover=?10,
-        translation_skill_id=?11, language_skill_id=?12 WHERE id=?9",
-        rusqlite::params![title, nonblank(&author), nonblank(&publisher), nonblank(&description), source, target, instructions, chrono::Utc::now().to_rfc3339(), project_id, settings.custom_cover, genre_skill, language_skill])?;
+        translation_skill_id=?11, language_skill_id=?12, batch_delay_secs=?13 WHERE id=?9",
+        rusqlite::params![title, nonblank(&author), nonblank(&publisher), nonblank(&description), source, target, instructions, chrono::Utc::now().to_rfc3339(), project_id, settings.custom_cover, genre_skill, language_skill, settings.batch_delay_secs])?;
     if changed == 0 {
         return Err(AppError::new(
             "project_not_found",

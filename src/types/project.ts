@@ -71,6 +71,8 @@ export type BookSettings = {
   genreSkillId?: string | null;
   /** Selected target-language translation skill, or null for none. */
   languageSkillId?: string | null;
+  /** Seconds to pause between chapters when translating all untranslated chapters. */
+  batchDelaySecs: number;
 };
 
 export type TranslationSkillKind = "genre" | "language";

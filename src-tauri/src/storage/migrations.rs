@@ -181,6 +181,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
             PRIMARY KEY (project_id, href)
         );",
     ),
+    (
+        15,
+        "ALTER TABLE projects ADD COLUMN batch_delay_secs INTEGER NOT NULL DEFAULT 10;",
+    ),
 ];
 
 /// Highest defined schema version. Currently asserted on by tests; production

@@ -15,6 +15,7 @@ import { BookExportMenu } from "../export/BookExportMenu";
 import { AiSettingsDialog } from "../settings/AiSettingsDialog";
 import type { AppearancePreferences } from "../settings/AppearanceSettings";
 import { StylesheetDialog } from "../stylesheets/StylesheetDialog";
+import { BatchTranslationBar } from "../translator/BatchTranslationBar";
 import { BookSettingsDialog } from "../workspace/BookSettingsDialog";
 
 type LibraryView = "table" | "grid";
@@ -219,6 +220,8 @@ export function LibraryScreen({ onOpenProject, appearance }: LibraryScreenProps)
           </div>
         </section>
       ) : null}
+
+      <BatchTranslationBar />
 
       <section className="panel library-books" aria-labelledby="recent-projects-heading">
         <div className="panel__header">

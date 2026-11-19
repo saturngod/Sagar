@@ -1360,6 +1360,11 @@ fn book_settings_persist_instructions_and_export_metadata_without_changing_sourc
     let original = std::fs::read(&source).expect("source");
     let book = import_rich_book(&data_dir, &source);
     let mut settings = services::book_settings::get(&data_dir, &book.project_id).expect("settings");
+    assert_eq!(
+        settings.batch_delay_secs, 10,
+        "new books pause 10 seconds by default"
+    );
+    settings.batch_delay_secs = 45;
     settings.title = "မြန်မာစာ & Stories".into();
     settings.author = "မောင်မောင် & Co".into();
     settings.publisher = "Local <Press>".into();
@@ -1369,6 +1374,10 @@ fn book_settings_persist_instructions_and_export_metadata_without_changing_sourc
     let loaded = services::book_settings::get(&data_dir, &book.project_id).expect("reopen");
     assert_eq!(loaded.title, settings.title);
     assert_eq!(loaded.instructions, settings.instructions);
+    assert_eq!(loaded.batch_delay_secs, 45);
+    let mut too_long = settings.clone();
+    too_long.batch_delay_secs = 3601;
+    assert!(services::book_settings::save(&data_dir, &book.project_id, too_long).is_err());
     let conn = services::workspace::open_db(&data_dir).expect("db");
     let ai_source =
         sagar_lib::storage::ai_translate::translation_source(&conn, &book.chapter_ids[0])

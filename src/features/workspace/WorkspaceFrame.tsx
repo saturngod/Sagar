@@ -25,6 +25,8 @@ import { ChapterSidebar } from "../chapters/ChapterSidebar";
 import { BookExportMenu } from "../export/BookExportMenu";
 import { SourcePane } from "../reader/SourcePane";
 import { AiBackgroundBar } from "../translator/AiBackgroundBar";
+import { useAiBatch } from "../translator/aiBatch";
+import { BatchTranslationBar } from "../translator/BatchTranslationBar";
 import { plainFragment } from "../translator/richText";
 import { TargetPane } from "../translator/TargetPane";
 import { useChapterEditor } from "../translator/useChapterEditor";
@@ -183,6 +185,41 @@ export function WorkspaceFrame({
   const editor = useChapterEditor(
     contentState.status === "ready" ? contentState.content : null,
   );
+
+  // "Translate all chapters" saves drafts in the background: refresh chapter
+  // progress, and reload the open chapter when it received a result and has
+  // no unsaved edits of its own.
+  const { saved: batchSaved } = useAiBatch();
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
+  const activeChapterRef = useRef(activeChapterId);
+  activeChapterRef.current = activeChapterId;
+  useEffect(() => {
+    if (!batchSaved) return;
+    let current = true;
+    void listChapters(projectId)
+      .then((chapters) => {
+        if (current)
+          setProjectState((state) =>
+            state.status === "ready" ? { ...state, chapters } : state,
+          );
+      })
+      .catch(() => {
+        // Progress refreshes on the next chapter load.
+      });
+    const draft = editorRef.current.draft;
+    if (
+      batchSaved.chapterId === activeChapterRef.current &&
+      draft?.chapterId === batchSaved.chapterId &&
+      !draft.dirty &&
+      !editorRef.current.appending
+    ) {
+      loadChapter(batchSaved.chapterId);
+    }
+    return () => {
+      current = false;
+    };
+  }, [batchSaved, loadChapter, projectId]);
 
   useSyncedScroll(
     sourceScrollRef,
@@ -497,6 +534,7 @@ export function WorkspaceFrame({
       ) : null}
 
       <AiBackgroundBar onOpenChapter={openAiForChapter} />
+      <BatchTranslationBar projectId={projectId} />
 
       {warningsVisible && importWarnings.length > 0 ? (
         <section className="panel workspace__warnings" aria-label={t("Import notes")}>
