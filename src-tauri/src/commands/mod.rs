@@ -493,6 +493,46 @@ pub async fn save_book_settings(
 }
 
 #[tauri::command]
+pub async fn list_stylesheets(
+    app: AppHandle,
+    project_id: String,
+) -> Result<Vec<services::stylesheets::StylesheetSummary>, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || services::stylesheets::list(&data_dir, &project_id)).await
+}
+
+#[tauri::command]
+pub async fn get_stylesheet(
+    app: AppHandle,
+    project_id: String,
+    href: String,
+) -> Result<services::stylesheets::StylesheetContent, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || services::stylesheets::read(&data_dir, &project_id, &href)).await
+}
+
+#[tauri::command]
+pub async fn save_stylesheet(
+    app: AppHandle,
+    project_id: String,
+    href: String,
+    css: String,
+) -> Result<services::stylesheets::StylesheetContent, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || services::stylesheets::save(&data_dir, &project_id, &href, &css)).await
+}
+
+#[tauri::command]
+pub async fn reset_stylesheet(
+    app: AppHandle,
+    project_id: String,
+    href: String,
+) -> Result<services::stylesheets::StylesheetContent, AppError> {
+    let data_dir = app_data_dir(&app)?;
+    run_blocking(move || services::stylesheets::reset(&data_dir, &project_id, &href)).await
+}
+
+#[tauri::command]
 pub async fn list_translation_skills(
     app: AppHandle,
 ) -> Result<Vec<services::skills::SkillSummary>, AppError> {

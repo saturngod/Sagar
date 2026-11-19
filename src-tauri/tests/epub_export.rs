@@ -2194,3 +2194,82 @@ fn unknown_export_format_is_rejected() {
     .expect_err("rejected");
     assert_eq!(error.code, "invalid_export_format");
 }
+
+#[test]
+fn edited_stylesheet_is_exported_without_touching_the_snapshot() {
+    let dir = tempdir();
+    let data_dir = tempdir();
+    let original_css = b"p { margin: 0; }\n".to_vec();
+    let mut files = rich_book_files();
+    for (name, bytes) in &mut files {
+        if name == "OEBPS/content.opf" {
+            let text = String::from_utf8(bytes.clone()).expect("opf text").replace(
+                "</manifest>",
+                "<item id=\"css\" href=\"styles/book.css\" media-type=\"text/css\"/></manifest>",
+            );
+            *bytes = text.into_bytes();
+        }
+    }
+    files.push(("OEBPS/styles/book.css".into(), original_css.clone()));
+    let refs: Vec<(&str, &[u8])> = files
+        .iter()
+        .map(|(n, b)| (n.as_str(), b.as_slice()))
+        .collect();
+    let source = write_epub(&dir, "styled.epub", &refs);
+    let source_bytes = std::fs::read(&source).expect("source");
+    let book = import_rich_book(&data_dir, &source);
+
+    let listed = services::stylesheets::list(&data_dir, &book.project_id).expect("list");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].href, "OEBPS/styles/book.css");
+    assert_eq!(listed[0].name, "styles/book.css");
+    assert!(!listed[0].modified);
+
+    let href = listed[0].href.clone();
+    let read = services::stylesheets::read(&data_dir, &book.project_id, &href).expect("read");
+    assert_eq!(read.css.as_bytes(), original_css.as_slice());
+
+    // Unknown paths are rejected rather than read from the archive.
+    let unknown = services::stylesheets::read(&data_dir, &book.project_id, "OEBPS/ch1.xhtml");
+    assert_eq!(
+        unknown.expect_err("not a stylesheet").code,
+        "stylesheet_not_found"
+    );
+
+    let edited = "p { margin: 0; font-family: \"Noto Sans Myanmar\"; } /* မြန်မာ */\n";
+    let saved =
+        services::stylesheets::save(&data_dir, &book.project_id, &href, edited).expect("save");
+    assert!(saved.modified);
+    assert!(services::stylesheets::list(&data_dir, &book.project_id).expect("list")[0].modified);
+
+    let destination = dir.join("styled-export.epub");
+    services::export::export_epub(
+        &data_dir,
+        ExportRequest {
+            project_id: book.project_id.clone(),
+            destination: destination.clone(),
+            mode: "draft".into(),
+            title: None,
+            language: None,
+            include_original: true,
+            format: "epub".into(),
+        },
+    )
+    .expect("export");
+    epub::export::validate_output(&destination).expect("valid export");
+    let mut archive =
+        zip::ZipArchive::new(std::fs::File::open(&destination).expect("open export")).expect("zip");
+    let mut exported = String::new();
+    archive
+        .by_name("OEBPS/styles/book.css")
+        .expect("css entry")
+        .read_to_string(&mut exported)
+        .expect("read css");
+    assert_eq!(exported, edited);
+    assert_eq!(std::fs::read(&source).expect("source"), source_bytes);
+
+    let reset = services::stylesheets::reset(&data_dir, &book.project_id, &href).expect("reset");
+    assert!(!reset.modified);
+    assert_eq!(reset.css.as_bytes(), original_css.as_slice());
+    assert!(!services::stylesheets::list(&data_dir, &book.project_id).expect("list")[0].modified);
+}

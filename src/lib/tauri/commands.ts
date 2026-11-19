@@ -278,6 +278,50 @@ export async function saveBookSettings(
   }
 }
 
+export async function listStylesheets(
+  projectId: string,
+): Promise<import("../../types/project").StylesheetSummary[]> {
+  try {
+    return await invoke("list_stylesheets", { projectId });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+
+export async function getStylesheet(
+  projectId: string,
+  href: string,
+): Promise<import("../../types/project").StylesheetContent> {
+  try {
+    return await invoke("get_stylesheet", { projectId, href });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+
+export async function saveStylesheet(
+  projectId: string,
+  href: string,
+  css: string,
+): Promise<import("../../types/project").StylesheetContent> {
+  try {
+    return await invoke("save_stylesheet", { projectId, href, css });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+
+export async function resetStylesheet(
+  projectId: string,
+  href: string,
+): Promise<import("../../types/project").StylesheetContent> {
+  try {
+    return await invoke("reset_stylesheet", { projectId, href });
+  } catch (error) {
+    throw toCommandError(error);
+  }
+}
+
 export async function listTranslationSkills(): Promise<
   import("../../types/project").TranslationSkillSummary[]
 > {

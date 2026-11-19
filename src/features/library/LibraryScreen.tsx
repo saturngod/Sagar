@@ -14,6 +14,7 @@ import type { ImportWarning, ProjectSummary } from "../../types/project";
 import { BookExportMenu } from "../export/BookExportMenu";
 import { AiSettingsDialog } from "../settings/AiSettingsDialog";
 import type { AppearancePreferences } from "../settings/AppearanceSettings";
+import { StylesheetDialog } from "../stylesheets/StylesheetDialog";
 import { BookSettingsDialog } from "../workspace/BookSettingsDialog";
 
 type LibraryView = "table" | "grid";
@@ -57,6 +58,7 @@ export function LibraryScreen({ onOpenProject, appearance }: LibraryScreenProps)
   const [removeNotice, setRemoveNotice] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bookSettings, setBookSettings] = useState<ProjectSummary | null>(null);
+  const [bookCss, setBookCss] = useState<ProjectSummary | null>(null);
 
   useEffect(() => {
     try {
@@ -285,6 +287,7 @@ export function LibraryScreen({ onOpenProject, appearance }: LibraryScreenProps)
                   onOpen={onOpenProject}
                   onRequestRemove={setRemoving}
                   onSettings={setBookSettings}
+                  onEditCss={setBookCss}
                 />
               </li>
             ))}
@@ -316,6 +319,10 @@ export function LibraryScreen({ onOpenProject, appearance }: LibraryScreenProps)
             )
           }
         />
+      ) : null}
+
+      {bookCss ? (
+        <StylesheetDialog project={bookCss} onClose={() => setBookCss(null)} />
       ) : null}
 
       {settingsOpen ? (
@@ -435,11 +442,13 @@ function ProjectRow({
   onOpen,
   onRequestRemove,
   onSettings,
+  onEditCss,
 }: {
   project: ProjectSummary;
   onOpen: (projectId: string, warnings: ImportWarning[]) => void;
   onRequestRemove: (project: ProjectSummary) => void;
   onSettings: (project: ProjectSummary) => void;
+  onEditCss: (project: ProjectSummary) => void;
 }) {
   const { t } = useTranslation();
   const [coverSrc, setCoverSrc] = useState<string | null>(null);
@@ -515,7 +524,19 @@ function ProjectRow({
       <BookExportMenu project={project} onFlushSaves={flushNothing} iconSize={18} />
       <button
         type="button"
-        className="icon-button"
+        className="icon-button project-row__css"
+        aria-label={`Edit CSS for ${project.title}`}
+        title={t("Edit book CSS")}
+        onClick={(event) => {
+          event.currentTarget.focus();
+          onEditCss(project);
+        }}
+      >
+        <Icon name="palette" size={18} />
+      </button>
+      <button
+        type="button"
+        className="icon-button project-row__settings"
         aria-label={`Book settings for ${project.title}`}
         title={t("Book metadata and AI instructions")}
         onClick={() => onSettings(project)}

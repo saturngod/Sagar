@@ -54,6 +54,8 @@ const paths = {
   image: "M3 3h18v18H3V3Zm0 14 6-6 5 5 3-3 4 4M16 7h.01",
   list: "M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1",
   numbered: "M10 5h11M10 12h11M10 19h11M3 3h2v5M3 10h3v2l-3 3h3M3 18h3v4H3",
+  palette:
+    "M12 3a9 9 0 1 0 0 18c1.1 0 1.5-.8 1.5-1.5 0-.9-.7-1.3-.7-2.1 0-.8.6-1.4 1.4-1.4H16a5 5 0 0 0 5-5c0-4.4-4-8-9-8ZM7.5 11h.01M10 7.5h.01M14.5 7.5h.01M17 11h.01",
   code: "M8 6 2 12l6 6M16 6l6 6-6 6M14 3l-4 18",
   blockquote: "M5 6h5v6H5V6Zm0 6c0 4 2 5 4 5M14 6h5v6h-5V6Zm0 6c0 4 2 5 4 5",
   codeBlock: "M3 3h18v18H3V3Zm5 5-4 4 4 4M16 8l4 4-4 4",

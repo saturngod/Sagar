@@ -42,6 +42,22 @@ export type CoverImage = {
   base64: string;
 };
 
+/** A stylesheet from the book's manifest; `href` is its stable ZIP path. */
+export type StylesheetSummary = {
+  href: string;
+  name: string;
+  size: number;
+  modified: boolean;
+  updatedAt: string | null;
+};
+
+export type StylesheetContent = {
+  href: string;
+  css: string;
+  modified: boolean;
+  updatedAt: string | null;
+};
+
 export type BookSettings = {
   title: string;
   author: string;

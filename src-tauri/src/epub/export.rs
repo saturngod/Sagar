@@ -302,6 +302,9 @@ pub struct ExportInput {
     /// from the output book instead of falling back to original content.
     /// Defaults to true (preserve current draft behavior) when unset.
     pub include_original: bool,
+    /// Edited resources (ZIP-root path → bytes) that replace snapshot
+    /// entries verbatim, e.g. per-book stylesheet edits.
+    pub resource_overrides: HashMap<String, Vec<u8>>,
 }
 
 pub fn run_export(input: ExportInput) -> Result<ExportOutcome, AppError> {
@@ -525,6 +528,13 @@ pub fn run_export(input: ExportInput) -> Result<ExportOutcome, AppError> {
         ));
     }
     patched.insert(opf_path.clone(), opf_out);
+    for (name, bytes) in &input.resource_overrides {
+        // Only replace resources the book already has; never add new entries
+        // or clobber a chapter/package document patched above.
+        if snapshot.contains(name) && !excluded.contains(name) && !patched.contains_key(name) {
+            patched.insert(name.clone(), bytes.clone());
+        }
+    }
 
     write_archive(
         &input.snapshot_path,

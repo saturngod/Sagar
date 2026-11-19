@@ -15,6 +15,7 @@ pub mod projects;
 pub mod sharing;
 pub mod skill_install;
 pub mod skills;
+pub mod stylesheets;
 
 mod qoder;
 pub mod workspace;

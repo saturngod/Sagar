@@ -171,6 +171,16 @@ const MIGRATIONS: &[(i64, &str)] = &[
         "ALTER TABLE projects ADD COLUMN translation_skill_id TEXT;
          ALTER TABLE projects ADD COLUMN language_skill_id TEXT;",
     ),
+    (
+        14,
+        "CREATE TABLE stylesheet_overrides (
+            project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            href        TEXT NOT NULL,
+            css         TEXT NOT NULL,
+            updated_at  TEXT NOT NULL,
+            PRIMARY KEY (project_id, href)
+        );",
+    ),
 ];
 
 /// Highest defined schema version. Currently asserted on by tests; production

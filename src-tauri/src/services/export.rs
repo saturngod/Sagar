@@ -140,6 +140,7 @@ pub fn export_epub(data_dir: &Path, request: ExportRequest) -> Result<ExportOutc
         },
         chapters,
         include_original,
+        resource_overrides: crate::services::stylesheets::export_overrides(&conn, &project_id)?,
         load_blocks: Box::new(move |chapter_id: &str| {
             if let Some(document) = storage::documents::authored(&conn, chapter_id)? {
                 return Ok(vec![translations::BlockForExport {
