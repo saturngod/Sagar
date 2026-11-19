@@ -1,6 +1,6 @@
 // biome-ignore-all lint/a11y/noNoninteractiveTabindex: the scrollable chapter region must support keyboard scrolling.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { StatusNotice } from "../../components/StatusNotice";
 import { useTranslation } from "../../lib/i18n";
@@ -40,7 +40,7 @@ export function ExportDialog({
   const [title, setTitle] = useState(project.title);
   const [language, setLanguage] = useState(project.targetLanguage);
   const [languageError, setLanguageError] = useState<string | null>(null);
-  const [draftAck, setDraftAck] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [includeOriginal, setIncludeOriginal] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -117,14 +117,25 @@ export function ExportDialog({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [onClose, exporting]);
 
+  const detailsId = useId();
   const languageValid =
     language.trim().length > 0 &&
     [...language.trim()].every((c) => /[A-Za-z0-9-]/.test(c));
 
+  const formatLabel = format === "kfx" ? "KFX" : "EPUB";
   const translatedChapters =
     review?.chapters.filter((c) => c.reviewed || c.draft).length ?? 0;
+  const totalChapters = review?.chapters.length ?? 0;
+  const readyChapters = review ? review.reviewedTotal + review.skippedTotal : 0;
+  const readyPercent =
+    totalChapters > 0 ? Math.round((readyChapters / totalChapters) * 100) : 0;
+  // Chapters with no saved translation: they keep the original text or are left out.
+  const untranslatedChapters = review ? review.pendingTotal + review.skippedTotal : 0;
+  const mode: "completed" | "draft" = review?.complete ? "completed" : "draft";
+  const nothingToExport =
+    mode === "draft" && !includeOriginal && translatedChapters === 0;
 
-  async function runExport(mode: "completed" | "draft") {
+  async function runExport() {
     if (!review) {
       return;
     }
@@ -132,12 +143,9 @@ export function ExportDialog({
       setLanguageError("Enter a language tag such as “my” or “en-US”.");
       return;
     }
-    if (mode === "draft" && !draftAck) {
-      return;
-    }
-    if (mode === "draft" && !includeOriginal && translatedChapters === 0) {
+    if (nothingToExport) {
       setExportError(
-        "No translated chapters to export. Translate at least one chapter or enable original content.",
+        "No chapters are translated yet. Choose “Keep the original text” or translate a chapter first.",
       );
       return;
     }
@@ -172,6 +180,29 @@ export function ExportDialog({
     }
   }
 
+  function chapterStatus(chapter: ExportReview["chapters"][number]) {
+    if (chapter.reviewed) return { label: t("Translated"), tone: "reviewed" };
+    if (chapter.draft) return { label: t("Draft"), tone: "draft" };
+    const omitted = mode === "draft" && !includeOriginal;
+    if (chapter.skipped)
+      return { label: omitted ? t("Left out") : t("Original text"), tone: "original" };
+    return {
+      label: omitted ? t("Left out") : t("Not translated · original text"),
+      tone: "pending",
+    };
+  }
+
+  const incompleteParts = review
+    ? [
+        review.pendingTotal > 0
+          ? `${review.pendingTotal} ${t(review.pendingTotal === 1 ? "chapter isn’t translated" : "chapters aren’t translated")}`
+          : null,
+        review.draftTotal > 0
+          ? `${review.draftTotal} ${t(review.draftTotal === 1 ? "draft isn’t reviewed" : "drafts aren’t reviewed")}`
+          : null,
+      ].filter((part): part is string => part !== null)
+    : [];
+
   return (
     <div className="dialog-backdrop">
       <div
@@ -199,20 +230,78 @@ export function ExportDialog({
         </div>
 
         {loadError ? (
-          <StatusNotice kind="error" onRetry={loadReview}>
-            {loadError}
-          </StatusNotice>
+          <div className="export-dialog__body">
+            <StatusNotice kind="error" onRetry={loadReview}>
+              {loadError}
+            </StatusNotice>
+          </div>
         ) : null}
         {!loadError && !review ? (
-          <StatusNotice kind="loading">{t("Reviewing saved translations…")}</StatusNotice>
+          <div className="export-dialog__body">
+            <StatusNotice kind="loading">
+              {t("Reviewing saved translations…")}
+            </StatusNotice>
+          </div>
         ) : null}
 
         {review ? (
           <>
-            <div className="export-dialog__settings">
-              <div className="form-grid">
+            <div className="export-dialog__body">
+              <section className="export-progress" aria-label={t("Translation progress")}>
+                <div className="export-progress__headline">
+                  <strong>
+                    {readyChapters} / {totalChapters} {t("chapters ready")}
+                  </strong>
+                  <span>{readyPercent}%</span>
+                </div>
+                <div
+                  className="export-progress__track"
+                  role="progressbar"
+                  aria-label={t("Chapters ready")}
+                  aria-valuemin={0}
+                  aria-valuemax={totalChapters}
+                  aria-valuenow={readyChapters}
+                >
+                  <span style={{ width: `${readyPercent}%` }} />
+                </div>
+                <ul className="export-progress__legend">
+                  <li className="export-progress__item export-progress__item--reviewed">
+                    {review.reviewedTotal} {t("translated")}
+                  </li>
+                  <li className="export-progress__item export-progress__item--original">
+                    {review.skippedTotal} {t("kept original")}
+                  </li>
+                  {review.draftTotal > 0 ? (
+                    <li className="export-progress__item export-progress__item--draft">
+                      {review.draftTotal} {t("draft")}
+                    </li>
+                  ) : null}
+                  {review.pendingTotal > 0 ? (
+                    <li className="export-progress__item export-progress__item--pending">
+                      {review.pendingTotal} {t("not translated")}
+                    </li>
+                  ) : null}
+                  {review.unsupportedTotal > 0 ? (
+                    <li className="export-progress__item export-progress__item--original">
+                      {review.unsupportedTotal} {t("preserved unsupported")}
+                    </li>
+                  ) : null}
+                </ul>
+              </section>
+
+              {!review.complete ? (
+                <p className="export-dialog__draft-note" role="note">
+                  <Icon name="edit" size={16} />
+                  <span>
+                    {incompleteParts.join(" · ")}.{" "}
+                    {t("This export will be saved as a draft.")}
+                  </span>
+                </p>
+              ) : null}
+
+              <div className="form-grid export-dialog__fields">
                 <label className="form-field">
-                  <span>{t("Translated title")}</span>
+                  <span>{t("Book title")}</span>
                   <input
                     type="text"
                     value={title}
@@ -221,10 +310,11 @@ export function ExportDialog({
                   />
                 </label>
                 <label className="form-field">
-                  <span>{t("Target language (BCP 47)")}</span>
+                  <span>{t("Language code")}</span>
                   <input
                     type="text"
                     value={language}
+                    placeholder="my"
                     onChange={(event) => {
                       setLanguage(event.target.value);
                       setLanguageError(null);
@@ -237,162 +327,132 @@ export function ExportDialog({
                 </label>
               </div>
 
-              <p className="export-dialog__explanation">
-                {t("Draft export includes")}{" "}
-                <strong>{t("reviewed translations and saved drafts")}</strong>.{" "}
-                {includeOriginal ? (
-                  t(
-                    "Empty chapters and chapters marked “Keep original” retain the original content.",
-                  )
-                ) : (
-                  <>
-                    {t("Empty chapters and chapters marked “Keep original” are")}{" "}
-                    <strong>{t("omitted")}</strong>{" "}
-                    {t("— the draft contains only translated chapters.")}
-                  </>
-                )}
-              </p>
-              {!review.complete ? (
-                <label className="export-ack">
-                  <input
-                    type="checkbox"
-                    checked={includeOriginal}
-                    onChange={(event) => setIncludeOriginal(event.target.checked)}
-                  />
-                  <span>{t("Include original content for untranslated chapters.")}</span>
-                </label>
+              {!review.complete && untranslatedChapters > 0 ? (
+                <fieldset className="export-choice">
+                  <legend>
+                    {t("Chapters without a translation")} ({untranslatedChapters})
+                  </legend>
+                  <label className="export-choice__option">
+                    <input
+                      type="radio"
+                      name={`${detailsId}-untranslated`}
+                      checked={includeOriginal}
+                      onChange={() => setIncludeOriginal(true)}
+                    />
+                    <span>
+                      <strong>{t("Keep the original text")}</strong>
+                      <small>
+                        {t("The book stays complete; these chapters stay untranslated.")}
+                      </small>
+                    </span>
+                  </label>
+                  <label className="export-choice__option">
+                    <input
+                      type="radio"
+                      name={`${detailsId}-untranslated`}
+                      checked={!includeOriginal}
+                      onChange={() => setIncludeOriginal(false)}
+                    />
+                    <span>
+                      <strong>{t("Leave them out")}</strong>
+                      <small>{t("Only translated chapters are included.")}</small>
+                    </span>
+                  </label>
+                </fieldset>
               ) : null}
-              <div className="export-summary">
-                <span className="export-chip export-chip--success">
-                  {review.reviewedTotal} {t("reviewed")}
-                </span>
-                <span className="export-chip">
-                  {review.skippedTotal} {t("keep original")}
-                </span>
-                <span className="export-chip export-chip--warning">
-                  {review.draftTotal} {t("draft")}
-                </span>
-                <span className="export-chip export-chip--warning">
-                  {review.pendingTotal} {t("not translated")}
-                </span>
-                {review.unsupportedTotal > 0 ? (
-                  <span className="export-chip export-chip--muted">
-                    {review.unsupportedTotal} {t("preserved unsupported")}
-                  </span>
-                ) : null}
-              </div>
+
+              {review.chapters.length > 0 ? (
+                <div className="export-details">
+                  <button
+                    type="button"
+                    className="export-details__toggle"
+                    aria-expanded={detailsOpen}
+                    aria-controls={detailsId}
+                    onClick={() => {
+                      const opening = !detailsOpen;
+                      setDetailsOpen(opening);
+                      if (opening)
+                        requestAnimationFrame(() =>
+                          document
+                            .getElementById(detailsId)
+                            ?.scrollIntoView({ block: "nearest" }),
+                        );
+                    }}
+                  >
+                    <Icon name={detailsOpen ? "chevronDown" : "right"} size={16} />
+                    <span>
+                      {detailsOpen
+                        ? t("Hide chapter details")
+                        : t("Show chapter details")}{" "}
+                      ({review.chapters.length})
+                    </span>
+                  </button>
+                  {detailsOpen ? (
+                    <ul
+                      id={detailsId}
+                      className="export-details__list"
+                      aria-label={t("Chapter export review")}
+                      tabIndex={0}
+                    >
+                      {review.chapters.map((chapter) => {
+                        const status = chapterStatus(chapter);
+                        return (
+                          <li key={chapter.chapterId} className="export-details__row">
+                            <span className="export-details__title">{chapter.title}</span>
+                            <span
+                              className={`chapter-export-status chapter-export-status--${status.tone}`}
+                            >
+                              {status.label}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
-            {review.chapters.length > 0 ? (
-              <section
-                className="export-dialog__chapters"
-                aria-label={t("Chapter export review")}
-                tabIndex={0}
-              >
-                <table className="export-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("Chapter")}</th>
-                      <th scope="col">{t("Status")}</th>
-                      <th scope="col">{t("Draft export includes")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {review.chapters.map((chapter) => (
-                      <tr key={chapter.chapterId}>
-                        <td>{chapter.title}</td>
-                        <td>
-                          <span
-                            className={`chapter-export-status chapter-export-status--${chapter.reviewed ? "reviewed" : chapter.draft ? "draft" : "original"}`}
-                          >
-                            {chapter.reviewed
-                              ? t("Reviewed")
-                              : chapter.skipped
-                                ? t("Keep original")
-                                : chapter.draft
-                                  ? t("Draft")
-                                  : t("Not translated")}
-                          </span>
-                        </td>
-                        <td>
-                          {chapter.reviewed || chapter.draft
-                            ? t("Saved translation")
-                            : includeOriginal
-                              ? t("Original content")
-                              : t("Omitted")}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </section>
-            ) : null}
 
             <div className="export-dialog__footer">
-              {!review.complete ? (
-                <label className="export-ack">
-                  <input
-                    type="checkbox"
-                    checked={draftAck}
-                    onChange={(event) => setDraftAck(event.target.checked)}
-                  />
-                  <span>
-                    {t(
-                      "Include unreviewed drafts. I understand these translations may be incomplete.",
-                    )}
-                  </span>
-                </label>
-              ) : null}
-
               {exportError ? (
                 <StatusNotice kind="error">{exportError}</StatusNotice>
               ) : null}
-
-              <div className="button-row dialog__actions">
+              <div className="export-dialog__actions">
+                <p className="dialog__muted">
+                  {format === "kfx"
+                    ? t(
+                        "Your original book is not changed. KFX keeps JPEG, PNG and GIF images only.",
+                      )
+                    : t("Your original book is not changed.")}
+                </p>
                 <button
                   type="button"
-                  className={`btn${review.complete ? " btn--primary" : ""}`}
-                  disabled={!review.complete || exporting}
-                  onClick={() => void runExport("completed")}
-                  title={
-                    review.complete
-                      ? t("All chapters are reviewed or intentionally kept original")
-                      : t("Finish reviewing every chapter to enable a completed export")
-                  }
+                  className="btn"
+                  disabled={exporting}
+                  onClick={onClose}
                 >
-                  <Icon name="download" />
-                  {format === "kfx"
-                    ? t("Export completed KFX")
-                    : t("Export completed EPUB")}
+                  <Icon name="close" size={16} />
+                  {t("Cancel")}
                 </button>
                 <button
                   type="button"
-                  className={`btn${!review.complete ? " btn--primary" : ""}`}
-                  disabled={
-                    review.complete ||
-                    !draftAck ||
-                    exporting ||
-                    (!includeOriginal && translatedChapters === 0)
-                  }
-                  onClick={() => void runExport("draft")}
+                  className="btn btn--primary"
+                  disabled={exporting || nothingToExport}
                   title={
-                    !includeOriginal && translatedChapters === 0
-                      ? "Translate at least one chapter or enable original content"
+                    nothingToExport
+                      ? t("Choose “Keep the original text” or translate a chapter first")
                       : undefined
                   }
+                  onClick={() => void runExport()}
                 >
-                  <Icon name="download" />
-                  {t("Export draft…")}
+                  <Icon name="download" size={16} />
+                  {exporting
+                    ? t("Exporting…")
+                    : mode === "completed"
+                      ? `${t("Export")} ${formatLabel}`
+                      : `${t("Export draft")} ${formatLabel}`}
                 </button>
               </div>
-              <p className="dialog__muted">
-                {format === "kfx"
-                  ? t(
-                      "Save a Kindle KFX file to a location you choose. Your original book stays unchanged. Images that are not JPEG, PNG or GIF are omitted and listed after export.",
-                    )
-                  : t(
-                      "Save a separate EPUB to a location you choose. Your original book stays unchanged.",
-                    )}
-              </p>
             </div>
           </>
         ) : null}

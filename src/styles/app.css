@@ -1794,77 +1794,210 @@ button {
     visibility: hidden;
   }
 }
-/* Keep export settings and actions visible while reviewing long books. */
+/* Export: a short summary first, details on demand, one primary action. */
 .export-dialog {
-  width: min(860px, calc(100vw - 48px));
+  width: min(620px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
-  height: min(760px, calc(100vh - 48px));
   padding: 0;
   gap: 0;
   overflow: hidden;
 }
 .export-dialog__header {
-  padding: 18px 24px;
+  padding: 16px 24px;
   border-bottom: var(--border-subtle);
   flex: none;
 }
-.export-dialog__settings {
+.export-dialog__body {
   display: grid;
-  gap: 12px;
-  padding: 16px 24px;
-  flex: none;
-}
-.export-dialog__explanation {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--color-text);
-}
-.export-dialog__chapters {
-  flex: 1;
-  min-height: 80px;
+  gap: 18px;
+  padding: 20px 24px;
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  border-block: var(--border-subtle);
 }
-.export-dialog__chapters .export-table {
+.export-progress {
+  display: grid;
+  gap: 8px;
+}
+.export-progress__headline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+}
+.export-progress__headline > span {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.export-progress__track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-border);
+}
+.export-progress__track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-success);
+}
+.export-progress__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
   margin: 0;
-  width: 100%;
-}
-.export-dialog__chapters th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--color-bg);
-  color: var(--color-text);
-  text-align: left;
-  white-space: nowrap;
-}
-.export-dialog__chapters td,
-.export-dialog__chapters th {
-  padding: 11px 24px;
+  padding: 0;
+  list-style: none;
+  color: var(--color-text-muted);
   font-size: 13px;
 }
-.export-dialog__chapters td:first-child {
-  width: 48%;
-  overflow-wrap: anywhere;
+.export-progress__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
-.export-dialog__chapters tr:hover td {
+.export-progress__item::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-border);
+}
+.export-progress__item--reviewed::before {
+  background: var(--color-success);
+}
+.export-progress__item--draft::before {
+  background: var(--color-warning);
+}
+.export-progress__item--pending::before {
+  background: var(--color-warning-border);
+}
+.export-dialog__draft-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-control);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.export-dialog__draft-note > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.export-dialog__fields {
+  grid-template-columns: minmax(0, 1fr) 140px;
+}
+.export-choice {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.export-choice legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.export-choice__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: var(--border-subtle);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+.export-choice__option:has(input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-surface-selected);
+}
+.export-choice__option input {
+  margin-top: 3px;
+}
+.export-choice__option > span {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+.export-choice__option small {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.export-details {
+  display: grid;
+  gap: 8px;
+}
+.export-details__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  min-height: 32px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.export-details__toggle:hover {
   background: var(--color-surface-hover);
+}
+.export-details__list {
+  max-height: 240px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  border: var(--border-subtle);
+  border-radius: var(--radius-control);
+}
+.export-details__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.export-details__row + .export-details__row {
+  border-top: var(--border-subtle);
+}
+.export-details__title {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .export-dialog__footer {
   flex: none;
-  padding: 16px 24px;
   display: grid;
   gap: 12px;
+  padding: 14px 24px;
+  border-top: var(--border-subtle);
 }
-.export-dialog__footer .export-ack,
-.export-dialog__footer .dialog__muted {
+.export-dialog__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.export-dialog__actions .dialog__muted {
+  flex: 1;
+  min-width: 0;
   margin: 0;
-  line-height: 1.5;
-}
-.export-dialog__footer .dialog__muted {
   font-size: 12px;
+  line-height: 1.4;
 }
 .export-dialog .btn:disabled {
   opacity: 1;
@@ -1873,9 +2006,10 @@ button {
   color: var(--color-text-muted);
 }
 .chapter-export-status {
-  display: inline-block;
+  flex: none;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
 }
 .chapter-export-status--reviewed {
   color: var(--color-success);
@@ -1883,17 +2017,19 @@ button {
 .chapter-export-status--draft {
   color: var(--color-warning);
 }
-.chapter-export-status--original {
+.chapter-export-status--original,
+.chapter-export-status--pending {
   color: var(--color-text-muted);
 }
-@media (max-height: 700px) {
-  .export-dialog__header {
-    padding-block: 12px;
+@media (max-width: 560px) {
+  .export-dialog__fields {
+    grid-template-columns: minmax(0, 1fr);
   }
-  .export-dialog__settings,
-  .export-dialog__footer {
-    padding-block: 12px;
-    gap: 8px;
+  .export-dialog__actions {
+    flex-wrap: wrap;
+  }
+  .export-dialog__actions .dialog__muted {
+    flex-basis: 100%;
   }
 }
 
