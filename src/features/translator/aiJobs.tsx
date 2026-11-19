@@ -88,6 +88,14 @@ export function AiJobsProvider({ children }: { children: ReactNode }) {
   /** Events that arrive before their job is registered (fast local providers). */
   const buffered = useRef(new Map<string, AiTranslationEvent[]>());
   const bufferedRuns = useRef(new Map<string, SelectionEvent[]>());
+  /**
+   * Registered ids, updated synchronously in `track`. `jobsRef` only refreshes
+   * on render, so an instant failure (for example HTTP 503) that lands between
+   * registration and the next render would otherwise be buffered after the
+   * buffer was drained and leave the run "running" forever.
+   */
+  const trackedJobs = useRef(new Set<string>());
+  const trackedRuns = useRef(new Set<string>());
 
   const patchJob = useCallback((jobId: string, patch: Partial<AiJob>) => {
     setJobs((current) =>
@@ -140,6 +148,8 @@ export function AiJobsProvider({ children }: { children: ReactNode }) {
   const track = useCallback(
     (kind: AiJobKind, input: AiJobInput) => {
       const now = Date.now();
+      if (kind === "chapter") trackedJobs.current.add(input.jobId);
+      else if (input.runId) trackedRuns.current.add(input.runId);
       setJobs((current) => {
         const existing = current.find((job) => job.jobId === input.jobId);
         if (existing) {
@@ -227,7 +237,9 @@ export function AiJobsProvider({ children }: { children: ReactNode }) {
     const unlisteners: (() => void)[] = [];
     const onTranslation = (event: AiTranslationEvent) => {
       if (disposed) return;
-      const known = jobsRef.current.some((job) => job.jobId === event.jobId);
+      const known =
+        trackedJobs.current.has(event.jobId) ||
+        jobsRef.current.some((job) => job.jobId === event.jobId);
       if (!known) {
         const pending = buffered.current.get(event.jobId) ?? [];
         buffered.current.set(
@@ -240,9 +252,11 @@ export function AiJobsProvider({ children }: { children: ReactNode }) {
     };
     const onSelection = (event: SelectionEvent) => {
       if (disposed) return;
-      const known = jobsRef.current.some(
-        (job) => job.kind === "selection" && job.runId === event.runId,
-      );
+      const known =
+        trackedRuns.current.has(event.runId) ||
+        jobsRef.current.some(
+          (job) => job.kind === "selection" && job.runId === event.runId,
+        );
       if (!known) {
         const pending = bufferedRuns.current.get(event.runId) ?? [];
         bufferedRuns.current.set(

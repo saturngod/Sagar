@@ -83,6 +83,8 @@ export function AiGenerateDialog({
   /** The run this dialog owns, even after it reached a terminal state. */
   const ownedJobId = useRef<string | null>(null);
   const starting = useRef(false);
+  /** Runs this dialog already saw finish; never re-adopt them as running. */
+  const finishedJobIds = useRef(new Set<string>());
   const closed = useRef(false);
   const pendingEvents = useRef<AiTranslationEvent[]>([]);
   const receiveEvent = useRef<(event: AiTranslationEvent) => void>(() => {});
@@ -225,6 +227,7 @@ export function AiGenerateDialog({
         });
         return;
       }
+      finishedJobIds.current.add(payload.jobId);
       if (payload.partialText != null) setStreamed(payload.partialText);
       if (payload.kind === "done" && payload.proposalHtml) {
         const current = editorRef.current;
@@ -308,7 +311,10 @@ export function AiGenerateDialog({
   useEffect(() => {
     const active = jobs.find(
       (job) =>
-        job.kind === "chapter" && job.chapterId === chapterId && job.state === "running",
+        job.kind === "chapter" &&
+        job.chapterId === chapterId &&
+        job.state === "running" &&
+        !finishedJobIds.current.has(job.jobId),
     );
     if (active && !jobId.current && !starting.current) {
       jobId.current = active.jobId;
