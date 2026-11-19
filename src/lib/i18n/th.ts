@@ -304,7 +304,7 @@ export const th: Record<string, string> = {
   "Choose cover": "เลือกปก",
   "Export details": "รายละเอียดการส่งออก",
   "Instructions help": "ความช่วยเหลือเกี่ยวกับคำสั่ง",
-  "Save applies to both tabs.": "บันทึกการเปลี่ยนแปลงทั้งสองแท็บ",
+  "Save applies to all tabs.": "บันทึกการเปลี่ยนแปลงทุกแท็บ",
   "Send this chapter’s text to": "ส่งข้อความของบทนี้ไปยัง",
   "via API": "ผ่าน API",
   "via installed tool": "ผ่านเครื่องมือที่ติดตั้ง",

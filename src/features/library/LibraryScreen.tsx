@@ -12,6 +12,7 @@ import {
 import { CommandError } from "../../lib/tauri/errors";
 import type { ImportWarning, ProjectSummary } from "../../types/project";
 import { BookExportMenu } from "../export/BookExportMenu";
+import { UploadAllBar } from "../sagarnet/UploadAllBar";
 import { AiSettingsDialog } from "../settings/AiSettingsDialog";
 import type { AppearancePreferences } from "../settings/AppearanceSettings";
 import { StylesheetDialog } from "../stylesheets/StylesheetDialog";
@@ -222,6 +223,7 @@ export function LibraryScreen({ onOpenProject, appearance }: LibraryScreenProps)
       ) : null}
 
       <BatchTranslationBar />
+      <UploadAllBar />
 
       <section className="panel library-books" aria-labelledby="recent-projects-heading">
         <div className="panel__header">

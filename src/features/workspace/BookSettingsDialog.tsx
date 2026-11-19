@@ -14,9 +14,13 @@ import type {
   ProjectSummary,
   TranslationSkillSummary,
 } from "../../types/project";
+import { UploadAllPanel } from "../sagarnet/UploadAllPanel";
 import { untranslatedChapters, useAiBatch, useNow } from "../translator/aiBatch";
 import { batchProgress, batchStateLabel } from "../translator/BatchTranslationBar";
 import { TranslationSkillPicker } from "./TranslationSkillPicker";
+
+type BookSettingsTab = "metadata" | "instructions" | "batch" | "upload";
+const TABS: BookSettingsTab[] = ["metadata", "instructions", "batch", "upload"];
 
 /** Matches the Rust limit for the pause between batch chapters. */
 const MAX_BATCH_DELAY_SECS = 3600;
@@ -25,14 +29,17 @@ export function BookSettingsDialog({
   project,
   onClose,
   onSaved,
+  onFlush,
 }: {
   project: ProjectSummary;
   onClose: () => void;
   onSaved: (project: ProjectSummary) => void;
+  /** Saves pending editor changes; given when opened from the workspace. */
+  onFlush?: () => Promise<boolean>;
 }) {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<BookSettings | null>(null);
-  const [tab, setTab] = useState<"metadata" | "instructions">("metadata");
+  const [tab, setTab] = useState<BookSettingsTab>("metadata");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [readingCover, setReadingCover] = useState(false);
@@ -273,7 +280,8 @@ export function BookSettingsDialog({
           onKeyDown={(event) => {
             if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
             event.preventDefault();
-            const next = tab === "metadata" ? "instructions" : "metadata";
+            const step = event.key === "ArrowRight" ? 1 : TABS.length - 1;
+            const next = TABS[(TABS.indexOf(tab) + step) % TABS.length];
             setTab(next);
             document.getElementById(`book-settings-tab-${next}`)?.focus();
           }}
@@ -303,6 +311,32 @@ export function BookSettingsDialog({
           >
             <Icon name="sparkles" />
             {t("AI instructions")}
+          </button>
+          <button
+            type="button"
+            className="tab"
+            role="tab"
+            id="book-settings-tab-batch"
+            aria-selected={tab === "batch"}
+            aria-controls="book-settings-panel-batch"
+            tabIndex={tab === "batch" ? 0 : -1}
+            onClick={() => setTab("batch")}
+          >
+            <Icon name="play" />
+            {t("Translate all")}
+          </button>
+          <button
+            type="button"
+            className="tab"
+            role="tab"
+            id="book-settings-tab-upload"
+            aria-selected={tab === "upload"}
+            aria-controls="book-settings-panel-upload"
+            tabIndex={tab === "upload" ? 0 : -1}
+            onClick={() => setTab("upload")}
+          >
+            <Icon name="cloudUpload" />
+            {t("Upload all")}
           </button>
         </div>
         {!settings && !error ? (
@@ -466,68 +500,19 @@ export function BookSettingsDialog({
                     </p>
                   </details>
                 </div>
-              ) : (
+              ) : tab === "upload" ? (
+                <UploadAllPanel
+                  project={project}
+                  settings={settings}
+                  disabled={saving || readingCover}
+                  translating={thisBatchActive}
+                  onFlush={onFlush}
+                  onStarted={onClose}
+                />
+              ) : tab === "batch" ? (
                 <div className="book-settings__instructions">
                   <section
-                    className="book-settings__skills"
-                    aria-labelledby="book-settings-skills-heading"
-                  >
-                    <h3
-                      className="book-settings__section-title"
-                      id="book-settings-skills-heading"
-                    >
-                      <Icon name="sparkles" />
-                      {t("Translation skills")}
-                    </h3>
-                    {skills ? (
-                      <div className="book-settings__fields">
-                        {(["genre", "language"] as const).map((kind) => (
-                          <TranslationSkillPicker
-                            key={kind}
-                            kind={kind}
-                            skills={skills}
-                            value={
-                              (kind === "genre"
-                                ? settings.genreSkillId
-                                : settings.languageSkillId) ?? null
-                            }
-                            targetLanguage={settings.targetLanguage}
-                            disabled={saving || readingCover}
-                            onChange={(id) =>
-                              setSettings((current) =>
-                                current
-                                  ? {
-                                      ...current,
-                                      [kind === "genre"
-                                        ? "genreSkillId"
-                                        : "languageSkillId"]: id,
-                                    }
-                                  : current,
-                              )
-                            }
-                          />
-                        ))}
-                      </div>
-                    ) : skillsError ? (
-                      <StatusNotice
-                        kind="error"
-                        onRetry={() => setSkillsRetry((v) => v + 1)}
-                      >
-                        {skillsError}
-                      </StatusNotice>
-                    ) : (
-                      <StatusNotice kind="loading">
-                        {t("Loading translation skills…")}
-                      </StatusNotice>
-                    )}
-                    <p className="dialog__muted">
-                      {t(
-                        "Skill rules are sent with every AI translation in this book. The book and current-run instructions take precedence when they conflict.",
-                      )}
-                    </p>
-                  </section>
-                  <section
-                    className="book-settings__skills book-settings__batch"
+                    className="book-settings__batch"
                     aria-labelledby="book-settings-batch-heading"
                   >
                     <h3
@@ -642,6 +627,67 @@ export function BookSettingsDialog({
                       )}
                     </p>
                   </section>
+                </div>
+              ) : (
+                <div className="book-settings__instructions">
+                  <section
+                    className="book-settings__skills"
+                    aria-labelledby="book-settings-skills-heading"
+                  >
+                    <h3
+                      className="book-settings__section-title"
+                      id="book-settings-skills-heading"
+                    >
+                      <Icon name="sparkles" />
+                      {t("Translation skills")}
+                    </h3>
+                    {skills ? (
+                      <div className="book-settings__fields">
+                        {(["genre", "language"] as const).map((kind) => (
+                          <TranslationSkillPicker
+                            key={kind}
+                            kind={kind}
+                            skills={skills}
+                            value={
+                              (kind === "genre"
+                                ? settings.genreSkillId
+                                : settings.languageSkillId) ?? null
+                            }
+                            targetLanguage={settings.targetLanguage}
+                            disabled={saving || readingCover}
+                            onChange={(id) =>
+                              setSettings((current) =>
+                                current
+                                  ? {
+                                      ...current,
+                                      [kind === "genre"
+                                        ? "genreSkillId"
+                                        : "languageSkillId"]: id,
+                                    }
+                                  : current,
+                              )
+                            }
+                          />
+                        ))}
+                      </div>
+                    ) : skillsError ? (
+                      <StatusNotice
+                        kind="error"
+                        onRetry={() => setSkillsRetry((v) => v + 1)}
+                      >
+                        {skillsError}
+                      </StatusNotice>
+                    ) : (
+                      <StatusNotice kind="loading">
+                        {t("Loading translation skills…")}
+                      </StatusNotice>
+                    )}
+                    <p className="dialog__muted">
+                      {t(
+                        "Skill rules are sent with every AI translation in this book. The book and current-run instructions take precedence when they conflict.",
+                      )}
+                    </p>
+                  </section>
                   <label className="form-field">
                     <span>{t("Book translation instructions")}</span>
                     <textarea
@@ -675,7 +721,7 @@ export function BookSettingsDialog({
             <div className="settings-footer">
               {error ? <StatusNotice kind="error">{error}</StatusNotice> : null}
               <div className="settings-footer__actions">
-                <span className="dialog__muted">{t("Save applies to both tabs.")}</span>
+                <span className="dialog__muted">{t("Save applies to all tabs.")}</span>
                 <div className="button-row dialog__actions">
                   <button
                     type="button"

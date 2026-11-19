@@ -309,7 +309,7 @@ export const zh: Record<string, string> = {
   "Choose cover": "选择封面",
   "Export details": "导出详情",
   "Instructions help": "指令帮助",
-  "Save applies to both tabs.": "保存将应用到两个标签页。",
+  "Save applies to all tabs.": "保存将应用到所有标签页。",
   "Send this chapter’s text to": "将本章文本发送至",
   "via API": "通过 API",
   "via installed tool": "通过已安装的工具",

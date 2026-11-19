@@ -469,7 +469,7 @@ export const shn: Record<string, string> = {
   "Choose cover": "လိူၵ်ႈၼႃႈပပ်ႉ",
   "Export details": "ၶေႃႈမုၼ်းၵၢၼ်သူင်ႇဢွၵ်ႇ",
   "Instructions help": "ၸွႆႈထႅမ်ၶေႃႈသင်ႇ",
-  "Save applies to both tabs.": "ၵၢၼ်သိမ်း တေၸႂ်ႉၼႂ်းသွင် tab တင်းသွင်။",
+  "Save applies to all tabs.": "ၵၢၼ်သိမ်း တေၸႂ်ႉၼႂ်းသွင် tab တင်းသွင်။",
   "Send this chapter’s text to": "သူင်ႇလိၵ်ႈတွၼ်ႈၼႆႉၸူး",
   "via API": "ၽၢၼ်ႇ API",
   "via installed tool": "ၽၢၼ်ႇၶိူင်ႈမိုဝ်းဢၼ်လူတ်ႇသႂ်ႇဝႆႉ",

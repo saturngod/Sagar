@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./app/App";
+import { UploadAllProvider } from "./features/sagarnet/uploadAll";
 import { AiBatchProvider } from "./features/translator/aiBatch";
 import { UpdateProvider } from "./features/updates/UpdateProvider";
 import { LanguageProvider } from "./lib/i18n";
@@ -12,7 +13,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <LanguageProvider>
       <UpdateProvider>
         <AiBatchProvider>
-          <App />
+          <UploadAllProvider>
+            <App />
+          </UploadAllProvider>
         </AiBatchProvider>
       </UpdateProvider>
     </LanguageProvider>

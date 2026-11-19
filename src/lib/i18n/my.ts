@@ -474,7 +474,7 @@ export const my: Record<string, string> = {
   "Choose cover": "မျက်နှာဖုံး ရွေးရန်",
   "Export details": "ထုတ်ယူမှု အသေးစိတ်",
   "Instructions help": "ညွှန်ကြားချက် အကူအညီ",
-  "Save applies to both tabs.": "သိမ်းခြင်းသည် နှစ်ဖက်လုံးအတွက် ဖြစ်ပါသည်။",
+  "Save applies to all tabs.": "သိမ်းခြင်းသည် tab အားလုံးအတွက် ဖြစ်ပါသည်။",
   "Send this chapter’s text to": "ဤအခန်းစာသားကို ပို့မည့်နေရာ:",
   "via API": "API မှတစ်ဆင့်",
   "via installed tool": "ထည့်သွင်းထားသော ကိရိယာမှတစ်ဆင့်",

@@ -24,6 +24,8 @@ import { ChapterPicker } from "../chapters/ChapterPicker";
 import { ChapterSidebar } from "../chapters/ChapterSidebar";
 import { BookExportMenu } from "../export/BookExportMenu";
 import { SourcePane } from "../reader/SourcePane";
+import { UploadAllBar } from "../sagarnet/UploadAllBar";
+import { isUploadActive, useUploadAll } from "../sagarnet/uploadAll";
 import { AiBackgroundBar } from "../translator/AiBackgroundBar";
 import { useAiBatch } from "../translator/aiBatch";
 import { BatchTranslationBar } from "../translator/BatchTranslationBar";
@@ -94,6 +96,8 @@ export function WorkspaceFrame({
   const [langOpen, setLangOpen] = useState(false);
   const [bookSettingsOpen, setBookSettingsOpen] = useState(false);
   const [sharingOpen, setSharingOpen] = useState<SharingMode | null>(null);
+  // SagarNet handles one request at a time, so sharing waits for Upload all.
+  const uploadingAll = isUploadActive(useUploadAll().upload);
   const [sharingMatch, setSharingMatch] = useState<Discovery | null>(null);
   const [sharingResult, setSharingResult] = useState<string | null>(null);
   useEffect(() => {
@@ -498,11 +502,13 @@ export function WorkspaceFrame({
           className="icon-button"
           aria-label="Upload to SagarNet"
           title={
-            sharingMatch?.match.exact.length
-              ? "Upload to SagarNet · this book is on SagarNet"
-              : "Upload to SagarNet"
+            uploadingAll
+              ? "Upload to SagarNet · wait for Upload all to finish"
+              : sharingMatch?.match.exact.length
+                ? "Upload to SagarNet · this book is on SagarNet"
+                : "Upload to SagarNet"
           }
-          disabled={!project}
+          disabled={!project || uploadingAll}
           onClick={() => setSharingOpen("submit")}
         >
           <Icon name="cloudUpload" />
@@ -511,8 +517,12 @@ export function WorkspaceFrame({
           type="button"
           className="icon-button"
           aria-label="Download from SagarNet"
-          title="Download from SagarNet"
-          disabled={!project}
+          title={
+            uploadingAll
+              ? "Download from SagarNet · wait for Upload all to finish"
+              : "Download from SagarNet"
+          }
+          disabled={!project || uploadingAll}
           onClick={() => setSharingOpen("browse")}
         >
           <Icon name="cloudDownload" />
@@ -535,6 +545,7 @@ export function WorkspaceFrame({
 
       <AiBackgroundBar onOpenChapter={openAiForChapter} />
       <BatchTranslationBar projectId={projectId} />
+      <UploadAllBar projectId={projectId} />
 
       {warningsVisible && importWarnings.length > 0 ? (
         <section className="panel workspace__warnings" aria-label={t("Import notes")}>
@@ -726,6 +737,7 @@ export function WorkspaceFrame({
         <BookSettingsDialog
           project={project}
           onClose={() => setBookSettingsOpen(false)}
+          onFlush={editor.flushAll}
           onSaved={(updated) =>
             setProjectState((current) =>
               current.status === "ready" ? { ...current, project: updated } : current,

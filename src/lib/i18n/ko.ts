@@ -306,7 +306,7 @@ export const ko: Record<string, string> = {
   "Choose cover": "표지 선택",
   "Export details": "내보내기 세부 정보",
   "Instructions help": "지침 도움말",
-  "Save applies to both tabs.": "두 탭의 변경 사항을 모두 저장합니다.",
+  "Save applies to all tabs.": "모든 탭의 변경 사항을 저장합니다.",
   "Send this chapter’s text to": "이 챕터의 텍스트를 보낼 대상:",
   "via API": "API를 통해",
   "via installed tool": "설치된 도구를 통해",

@@ -25,11 +25,17 @@ const CALLBACK_PATH: &str = "/oauth/callback";
 /// Fixed loopback port. Register this exact callback in SagarNet.
 const CALLBACK_PORT: u16 = 53142;
 const HTML_FORMAT: u64 = 2;
+/// Longest wait honored from a rate-limit `Retry-After` header.
+const MAX_RETRY_AFTER: Duration = Duration::from_secs(60);
+/// SagarNet pages chapters 100 at a time and allows up to 5,000.
+const MAX_CHAPTER_PAGES: u32 = 50;
 
 #[derive(Default)]
 pub struct SharingSession {
     account: Mutex<Option<Session>>,
     pending_sign_in: std::sync::Mutex<Option<CancellationToken>>,
+    /// Origin confirmed to accept chapter HTML, so a batch checks it once.
+    html_origin: std::sync::Mutex<Option<String>>,
 }
 
 impl SharingSession {
@@ -203,6 +209,25 @@ pub enum Operation {
     Cover {
         book: u64,
     },
+    /// Every chapter of an edition, across all pages.
+    AllChapters {
+        book: u64,
+        edition: u64,
+    },
+    /// Uploads one saved chapter for "Upload all": reads the latest local
+    /// draft, inlines its book images and saves it over the caller's copy.
+    UploadChapter {
+        project: String,
+        local_chapter: String,
+        chapter: u64,
+        public: bool,
+        target_language: String,
+        /// Local revision last uploaded; an unchanged draft is not sent again.
+        last_local_revision: Option<i64>,
+        /// Server revision this device last saved. A different revision
+        /// means the copy changed on SagarNet, so it is not overwritten.
+        last_server_revision: Option<u64>,
+    },
 }
 
 #[derive(Deserialize, Serialize)]
@@ -277,14 +302,44 @@ fn endpoint(origin: &Url, path: &str) -> Result<Url, AppError> {
         .map_err(|_| failure("Invalid SagarNet endpoint."))
 }
 
-async fn checked(request: RequestBuilder) -> Result<Response, AppError> {
-    let response = request
+async fn send_json(request: RequestBuilder) -> Result<Response, AppError> {
+    request
         .header(reqwest::header::ACCEPT, "application/json")
         .send()
         .await
-        .map_err(|_| {
-            failure("Could not reach SagarNet. Check the server address and connection.")
-        })?;
+        .map_err(|_| failure("Could not reach SagarNet. Check the server address and connection."))
+}
+
+async fn checked(request: RequestBuilder) -> Result<Response, AppError> {
+    status_checked(send_json(request).await?).await
+}
+
+/// The wait a rate-limited response asks for, capped and defaulting to 5 s.
+fn retry_after(response: &Response) -> Duration {
+    response
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .map_or(Duration::from_secs(5), Duration::from_secs)
+        .min(MAX_RETRY_AFTER)
+}
+
+/// Like `checked`, but when SagarNet rate-limits the request it waits as
+/// asked (`Retry-After`) and tries once more. Used by long batch uploads.
+async fn checked_patiently(request: RequestBuilder) -> Result<Response, AppError> {
+    let retry = request.try_clone();
+    let response = send_json(request).await?;
+    if response.status() == StatusCode::TOO_MANY_REQUESTS
+        && let Some(retry) = retry
+    {
+        tokio::time::sleep(retry_after(&response)).await;
+        return checked(retry).await;
+    }
+    status_checked(response).await
+}
+
+async fn status_checked(response: Response) -> Result<Response, AppError> {
     match response.status() {
         status if status.is_success() => Ok(response),
         StatusCode::UNAUTHORIZED => Err(AppError::new(
@@ -909,6 +964,135 @@ async fn local_work<T: Send + 'static>(
         .map_err(|_| failure("Could not prepare the local chapter."))?
 }
 
+/// Confirms once per server that it accepts chapter HTML (format 2).
+async fn ensure_html_format(
+    state: &SharingSession,
+    client: &Client,
+    origin: &Url,
+) -> Result<(), AppError> {
+    let key = origin.as_str().to_string();
+    if state
+        .html_origin
+        .lock()
+        .is_ok_and(|ready| ready.as_deref() == Some(key.as_str()))
+    {
+        return Ok(());
+    }
+    let capabilities: Value = checked_patiently(client.get(endpoint(origin, "/api/v1/languages")?))
+        .await?
+        .json()
+        .await
+        .map_err(|_| failure("Could not check SagarNet’s chapter formats."))?;
+    if !capabilities["translation_content_format_versions"]
+        .as_array()
+        .is_some_and(|versions| versions.contains(&json!(HTML_FORMAT)))
+    {
+        return Err(failure(
+            "This SagarNet server needs an update before it can accept chapter HTML.",
+        ));
+    }
+    if let Ok(mut ready) = state.html_origin.lock() {
+        *ready = Some(key);
+    }
+    Ok(())
+}
+
+/// The chapter's latest saved draft as SagarNet HTML, with book images
+/// inlined, plus its local revision. `None` when the draft is empty.
+fn upload_content(
+    data_dir: &Path,
+    project: &str,
+    local_chapter: &str,
+    language: &str,
+) -> Result<Option<(String, i64)>, AppError> {
+    if !projects::get_project(data_dir, project)?
+        .target_language
+        .eq_ignore_ascii_case(language)
+    {
+        return Err(failure(
+            "The book’s target language changed. Open Upload all again.",
+        ));
+    }
+    let prepared = translation_html(data_dir, project, local_chapter)?;
+    if prepared
+        .as_ref()
+        .is_some_and(|(content, _)| content.contains('\0'))
+    {
+        return Err(failure("A translation must not contain null characters."));
+    }
+    Ok(prepared)
+}
+
+#[derive(Deserialize)]
+struct MySummary {
+    id: u64,
+    revision: u64,
+}
+
+/// Saves prepared chapter HTML over the caller's SagarNet copy. A new copy
+/// uses the requested visibility; an existing one keeps its visibility unless
+/// public was requested. A copy changed on SagarNet since this device last
+/// saved it is reported as a conflict instead of being overwritten.
+#[allow(clippy::too_many_arguments)]
+async fn upload_prepared(
+    state: &SharingSession,
+    client: &Client,
+    origin: &Url,
+    token: &str,
+    chapter: u64,
+    language: &str,
+    public: bool,
+    content: &str,
+    last_server_revision: Option<u64>,
+) -> Result<Value, AppError> {
+    ensure_html_format(state, client, origin).await?;
+    let url = endpoint(
+        origin,
+        &format!("/api/v1/chapters/{chapter}/my-translation"),
+    )?;
+    let existing: Option<MySummary> = checked_patiently(
+        client
+            .get(url.clone())
+            .query(&[("target_language", language)])
+            .bearer_auth(token),
+    )
+    .await?
+    .json()
+    .await
+    .map_err(|_| failure("SagarNet returned an invalid response."))?;
+    if let (Some(existing), Some(expected)) = (&existing, last_server_revision)
+        && existing.revision != expected
+    {
+        return Err(AppError::new(
+            "sharing_conflict",
+            "This chapter changed on SagarNet since your last upload. Review it in Submit translations.",
+        ));
+    }
+    let mut payload = json!({
+        "content": content, "target_language": language, "content_format_version": HTML_FORMAT,
+    });
+    match &existing {
+        Some(existing) => {
+            payload["translation_id"] = json!(existing.id);
+            payload["revision"] = json!(existing.revision);
+            if public {
+                payload["visibility"] = json!("public");
+            }
+        }
+        None => payload["visibility"] = json!(if public { "public" } else { "private" }),
+    }
+    let saved: Value = checked_patiently(client.put(url).bearer_auth(token).json(&payload))
+        .await?
+        .json()
+        .await
+        .map_err(|_| failure("SagarNet returned an invalid response."))?;
+    Ok(json!({
+        "status": "uploaded",
+        "revision": saved["revision"],
+        "visibility": saved["visibility"],
+    }))
+}
+
 pub async fn request(
     data_dir: std::path::PathBuf,
     state: &SharingSession,
@@ -958,12 +1142,97 @@ pub async fn request(
                 | Operation::PublishBook { .. }
                 | Operation::Create { .. }
                 | Operation::Save { .. }
+                | Operation::UploadChapter { .. }
                 | Operation::Delete { .. }
         )
     {
         return Err(AppError::new(
             "sharing_unauthorized",
             "Sign in to SagarNet before changing shares.",
+        ));
+    }
+    if let Operation::AllChapters { book, edition } = operation {
+        let mut chapters = Vec::new();
+        for page in 1..=MAX_CHAPTER_PAGES {
+            let body: Value = checked_patiently(send(
+                client
+                    .get(api(&format!("books/{book}/editions/{edition}/chapters"))?)
+                    .query(&[("page", page)]),
+                token.as_deref(),
+            ))
+            .await?
+            .json()
+            .await
+            .map_err(|_| failure("SagarNet returned an invalid response."))?;
+            if let Some(items) = body["data"].as_array() {
+                chapters.extend(items.iter().cloned());
+            }
+            if body["last_page"]
+                .as_u64()
+                .is_none_or(|last| u64::from(page) >= last)
+            {
+                break;
+            }
+        }
+        return Ok(Value::Array(chapters));
+    }
+    if let Operation::UploadChapter {
+        project,
+        local_chapter,
+        chapter,
+        public,
+        target_language,
+        last_local_revision,
+        last_server_revision,
+    } = operation
+    {
+        let language = sharing_language(&target_language)?;
+        let expected = language.clone();
+        let Some((content, local_revision)) =
+            local_work(move || upload_content(&data_dir, &project, &local_chapter, &expected))
+                .await?
+        else {
+            return Ok(json!({ "status": "empty" }));
+        };
+        if last_local_revision == Some(local_revision) {
+            return Ok(json!({ "status": "unchanged", "local_revision": local_revision }));
+        }
+        let Some(mut current) = token else {
+            return Err(failure("Sign in to SagarNet before changing shares."));
+        };
+        // An expired session is renewed once, then the upload is repeated;
+        // it is safe to repeat because it re-reads the server revision.
+        for attempt in 0..2 {
+            let result = upload_prepared(
+                state,
+                &client,
+                &origin,
+                &current,
+                chapter,
+                &language,
+                public,
+                &content,
+                last_server_revision,
+            )
+            .await;
+            match result {
+                Err(error) if error.code == "sharing_unauthorized" && attempt == 0 => {
+                    *session = None;
+                    match access(&mut session, &client, &settings, &origin).await? {
+                        Some(renewed) => current = renewed,
+                        None => return Err(error),
+                    }
+                }
+                Ok(mut body) => {
+                    body["local_revision"] = json!(local_revision);
+                    return Ok(body);
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        return Err(AppError::new(
+            "sharing_unauthorized",
+            "Sign in to SagarNet again.",
         ));
     }
     let checking_account = matches!(operation, Operation::Account);
@@ -1084,7 +1353,10 @@ pub async fn request(
             }
             client.post(api("books")?).multipart(form)
         }
-        Operation::LocalPreview { .. } | Operation::Cover { .. } => {
+        Operation::LocalPreview { .. }
+        | Operation::Cover { .. }
+        | Operation::AllChapters { .. }
+        | Operation::UploadChapter { .. } => {
             return Err(failure("The preview could not be opened."));
         }
         Operation::Save {
@@ -1122,19 +1394,7 @@ pub async fn request(
                 Ok(content)
             })
             .await?;
-            let capabilities: Value = checked(client.get(api("languages")?))
-                .await?
-                .json()
-                .await
-                .map_err(|_| failure("Could not check SagarNet’s chapter formats."))?;
-            if !capabilities["translation_content_format_versions"]
-                .as_array()
-                .is_some_and(|versions| versions.contains(&json!(HTML_FORMAT)))
-            {
-                return Err(failure(
-                    "This SagarNet server needs an update before it can accept chapter HTML.",
-                ));
-            }
+            ensure_html_format(state, &client, &origin).await?;
             let mut payload = json!({
                 "content": content, "target_language": language, "content_format_version": HTML_FORMAT,
                 "visibility": if public { "public" } else { "private" }
@@ -1363,6 +1623,106 @@ mod tests {
                 .await
                 .starts_with("SagarNet rejected")
         );
+    }
+
+    #[test]
+    fn honors_a_capped_retry_after_for_rate_limits() {
+        let reply = |value: Option<&str>| {
+            let mut builder = axum::http::Response::builder().status(429);
+            if let Some(value) = value {
+                builder = builder.header("Retry-After", value);
+            }
+            Response::from(builder.body(String::new()).expect("response"))
+        };
+        assert_eq!(retry_after(&reply(Some("2"))), Duration::from_secs(2));
+        assert_eq!(retry_after(&reply(Some("86400"))), MAX_RETRY_AFTER);
+        assert_eq!(retry_after(&reply(None)), Duration::from_secs(5));
+        assert_eq!(
+            retry_after(&reply(Some("Wed, 21 Oct 2026 07:28:00 GMT"))),
+            Duration::from_secs(5)
+        );
+    }
+
+    /// Imports a one-chapter book whose chapter sits in a subfolder and links
+    /// an image with a parent path and an encoded space.
+    fn imported_illustrated_book(root: &Path) -> (std::path::PathBuf, String, String) {
+        let file_path = root.join("illustrated.epub");
+        let mut zip = ZipWriter::new(std::fs::File::create(&file_path).expect("fixture file"));
+        let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        let image = png(40, 30, 0);
+        let files: [(&str, &[u8]); 5] = [
+            ("mimetype", b"application/epub+zip"),
+            (
+                "META-INF/container.xml",
+                br#"<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#,
+            ),
+            (
+                "OEBPS/content.opf",
+                br#"<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+                <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Pictures</dc:title></metadata>
+                <manifest><item id="c" href="text/ch1.xhtml" media-type="application/xhtml+xml"/><item id="i" href="images/my lady.png" media-type="image/png"/></manifest>
+                <spine><itemref idref="c"/></spine></package>"#,
+            ),
+            (
+                "OEBPS/text/ch1.xhtml",
+                br#"<html xmlns="http://www.w3.org/1999/xhtml"><head><title>One</title></head><body><p>Text</p><img src="../images/my%20lady.png" alt="Lady"/></body></html>"#,
+            ),
+            ("OEBPS/images/my lady.png", &image),
+        ];
+        for (entry, content) in files {
+            zip.start_file(entry, stored).expect("fixture entry");
+            zip.write_all(content).expect("fixture content");
+        }
+        zip.finish().expect("complete fixture");
+        let data = root.join("data");
+        let project = crate::services::import::import_epub(&data, &file_path, true)
+            .expect("import fixture")
+            .project;
+        let chapter = projects::list_chapters(&data, &project.id).expect("chapters")[0]
+            .id
+            .clone();
+        (data, project.id, chapter)
+    }
+
+    #[test]
+    fn prepares_upload_content_with_inlined_book_images() {
+        let directory = tempfile::tempdir().expect("fixture directory");
+        let (data, project, chapter) = imported_illustrated_book(directory.path());
+        assert!(
+            upload_content(&data, &project, &chapter, "my")
+                .expect("empty draft")
+                .is_none(),
+            "an empty draft is not uploaded"
+        );
+        let revision = {
+            let conn = workspace::open_db(&data).expect("db");
+            crate::storage::documents::load(&conn, &chapter)
+                .expect("draft")
+                .revision
+        };
+        workspace::save_chapter_document(
+            &data,
+            &chapter,
+            Some(r#"<p>စာ</p><p><img src="../images/my%20lady.png" alt="Lady"/></p>"#.into()),
+            "draft",
+            revision,
+        )
+        .expect("save draft");
+        let (content, local_revision) = upload_content(&data, &project, &chapter, "MY")
+            .expect("prepared")
+            .expect("content");
+        assert!(local_revision > revision);
+        assert!(
+            content.contains(r#"<img src="data:image/png;base64,"#),
+            "{content}"
+        );
+        assert!(!content.contains("my%20lady"), "{content}");
+        assert!(validated_sharing_html(&content).is_ok());
+        assert!(
+            upload_content(&data, &project, &chapter, "zh").is_err(),
+            "a changed target language stops the upload"
+        );
+        assert!(upload_content(&data, &project, "missing", "my").is_err());
     }
 
     #[test]

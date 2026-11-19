@@ -306,7 +306,7 @@ export const ja: Record<string, string> = {
   "Choose cover": "表紙を選択",
   "Export details": "書き出しの詳細",
   "Instructions help": "指示のヘルプ",
-  "Save applies to both tabs.": "両方のタブの変更を保存します。",
+  "Save applies to all tabs.": "すべてのタブの変更を保存します。",
   "Send this chapter’s text to": "この章の本文を送信する相手:",
   "via API": "API経由",
   "via installed tool": "インストール済みツール経由",

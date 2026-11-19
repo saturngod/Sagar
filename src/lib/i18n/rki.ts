@@ -474,7 +474,7 @@ export const rki: Record<string, string> = {
   "Choose cover": "မျက်နှာဖုံး ရွေးဖို့",
   "Export details": "ထုတ်ယူမှု အသေးစိတ်",
   "Instructions help": "ညွှန်ကြားချက် အကူအညီ",
-  "Save applies to both tabs.": "သိမ်းလိုက်စွာက tab နှစ်ခုစလုံးအတွက် သက်ရောက်ပါရေ။",
+  "Save applies to all tabs.": "သိမ်းလိုက်စွာက tab နှစ်ခုစလုံးအတွက် သက်ရောက်ပါရေ။",
   "Send this chapter’s text to": "အေအခန်းစာသား ပို့ဖို့နေရာ:",
   "via API": "API မှတစ်ဆင့်",
   "via installed tool": "ထည့်သွင်းထားရေ ကိရိယာမှတစ်ဆင့်",

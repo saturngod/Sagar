@@ -2,6 +2,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { StatusNotice } from "../../components/StatusNotice";
+import {
+  loadLink,
+  persistValue,
+  recordUpload,
+  type SagarNetLink,
+  sagarnetRequest,
+  saveLink,
+  storedValue,
+} from "../../lib/sagarnet/link";
 import { getBookSettings } from "../../lib/tauri/commands";
 import { toCommandError } from "../../lib/tauri/errors";
 import type { ChapterSummary, ProjectSummary } from "../../types/project";
@@ -40,12 +49,7 @@ type SharedContent = { content: string; content_format_version: number };
 type LocalPreview = { content: string; revision: number };
 export type SharingMode = "submit" | "browse";
 type Version = { id: number; contributor_name: string; target_language: string };
-type Link = {
-  book: number;
-  edition: number;
-  exact: boolean;
-  chapters: Record<string, number>;
-};
+type Link = SagarNetLink;
 type Props = {
   mode: SharingMode;
   project: ProjectSummary;
@@ -63,26 +67,9 @@ export type Discovery = { match: Match };
 
 const AUTO_MATCH_KEY = "sagarnet:auto-match";
 
-function stored<T>(key: string, fallback: T): T {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? (JSON.parse(value) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function persist(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Preferences are a convenience. Sharing still works without them.
-  }
-}
-
-function read<T>(kind: string, fields: Record<string, unknown> = {}) {
-  return invoke<T>("sharing_request", { operation: { kind, ...fields } });
-}
+const stored = storedValue;
+const persist = persistValue;
+const read = sagarnetRequest;
 
 export async function matchOpenedProject(project: string): Promise<Discovery | null> {
   if (!stored(AUTO_MATCH_KEY, false)) return null;
@@ -228,7 +215,6 @@ export function SharingDialog({
   const modal = useRef<HTMLDialogElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
   const local = chapters.find((chapter) => chapter.id === activeChapterId);
-  const key = `sagarnet:link:${availability?.host ?? ""}:${project.id}`;
 
   useEffect(() => {
     const dialog = modal.current;
@@ -364,8 +350,7 @@ export function SharingDialog({
     setAccount(signedIn);
     setCheckedAccount(true);
     if (submitting && !signedIn) return;
-    const linkKey = `sagarnet:link:${current?.host ?? ""}:${project.id}`;
-    const storedLink = stored<Link | null>(linkKey, null);
+    const storedLink = loadLink(current?.host, project.id);
     if (storedLink) {
       const book = await read<BookDetail>("book", { book: storedLink.book });
       await openEdition(book, storedLink.edition, storedLink, signedIn);
@@ -448,7 +433,7 @@ export function SharingDialog({
     }
     if (account) await read("link", { book: selection.id });
     const updated = { ...link, chapters: { ...link.chapters, [local.id]: chapterId } };
-    persist(key, updated);
+    saveLink(availability?.host, project.id, updated);
     setLink(updated);
     await browseChapter(chapterId);
     if (submitting) await loadLocalPreview();
@@ -470,7 +455,7 @@ export function SharingDialog({
   }
 
   function chooseAnotherBook() {
-    persist(key, null);
+    saveLink(availability?.host, project.id, null);
     setSelection(null);
     setLink(null);
     setRemoteChapters([]);
@@ -513,7 +498,7 @@ export function SharingDialog({
     if (!local || !localPreview) return;
     const publicShare = shareVisibility === "public";
     try {
-      await read("save", {
+      const saved = await read<{ revision: number; visibility: Visibility }>("save", {
         project: project.id,
         local_chapter: local.id,
         chapter: mapped,
@@ -522,6 +507,13 @@ export function SharingDialog({
         local_revision: localPreview.revision,
         target_language: targetLanguage,
       });
+      // Upload all skips unchanged chapters and protects this server revision.
+      if (link)
+        recordUpload(availability?.host, project.id, link, local.id, {
+          local: localPreview.revision,
+          remote: saved.revision,
+          visibility: saved.visibility,
+        });
     } catch (cause) {
       if (toCommandError(cause).code === "sharing_conflict") {
         await showServerCopy(mapped, local.title);

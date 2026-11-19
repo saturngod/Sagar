@@ -460,7 +460,7 @@ export const mnw: Record<string, string> = {
   "Choose cover": "ရုဲမုက်လိက်အုပ်",
   "Export details": "တၚ်နၚ်အသေးစိတ်ပွမပတိတ်",
   "Instructions help": "ရီုဗၚ်ညွှန်ကြားချက်",
-  "Save applies to both tabs.": "ပွမစွံလဝ် သက်ရောက်သီုၜါတပ်။",
+  "Save applies to all tabs.": "ပွမစွံလဝ် သက်ရောက်သီုၜါတပ်။",
   "Send this chapter’s text to": "ဗလးလိက်အခန်ဏအ်ကု",
   "via API": "နကဵု API",
   "via installed tool": "နကဵုကရိယာ မထည့်သွင်းလဝ်",
