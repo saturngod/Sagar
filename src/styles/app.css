@@ -4851,7 +4851,7 @@ button {
 .update-settings__text {
   margin: 0;
 }
-.update-settings__notes p {
+.update-settings__notes-body {
   margin: var(--space-2) 0 0;
   white-space: pre-wrap;
   font-size: var(--text-sm);
@@ -4917,7 +4917,7 @@ button {
   gap: var(--space-2);
   font-size: var(--text-sm);
 }
-.book-settings__batch-delay input {
+.book-settings__batch-input {
   width: 5rem;
   height: var(--control-height);
   border: 1px solid var(--color-border);
@@ -4927,7 +4927,7 @@ button {
   padding: 0 var(--space-2);
   font: inherit;
 }
-.book-settings__batch-delay input[aria-invalid="true"] {
+.book-settings__batch-input[aria-invalid="true"] {
   border-color: var(--color-error);
 }
 .book-settings__batch .export-ack {
@@ -4940,19 +4940,16 @@ button {
   gap: var(--space-2) var(--space-3);
   margin: 0;
 }
-.book-settings__batch-actions > p {
+.book-settings__batch-hint {
   margin: 0;
   font-size: var(--text-sm);
 }
+/* The notice takes the free width; Stop sits beside it. */
 .book-settings__batch-status {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
-}
-.book-settings__batch-status > :first-child {
-  flex: 1;
-  min-width: 0;
 }
 
 /* Book Settings → upload all chapters to SagarNet */

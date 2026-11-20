@@ -549,6 +549,7 @@ export function BookSettingsDialog({
                         <label className="book-settings__batch-delay">
                           <span>{t("Pause between chapters")}</span>
                           <input
+                            className="book-settings__batch-input"
                             type="number"
                             inputMode="numeric"
                             min={0}
@@ -568,9 +569,7 @@ export function BookSettingsDialog({
                                   ? Number.NaN
                                   : Number(event.target.value);
                               setSettings((current) =>
-                                current
-                                  ? { ...current, batchDelaySecs: value }
-                                  : current,
+                                current ? { ...current, batchDelaySecs: value } : current,
                               );
                             }}
                           />
@@ -586,9 +585,7 @@ export function BookSettingsDialog({
                             onChange={(event) => setBatchConsent(event.target.checked)}
                           />
                           <span>
-                            {t(
-                              "Send chapter text to the selected translation agent",
-                            )}
+                            {t("Send chapter text to the selected translation agent")}
                           </span>
                         </label>
                         {batchActive && batch ? (
@@ -617,7 +614,7 @@ export function BookSettingsDialog({
                             <Icon name="sparkles" />
                             {startingBatch ? t("Starting…") : t("Translate all")}
                           </button>
-                          <p className="dialog__muted">
+                          <p className="dialog__muted book-settings__batch-hint">
                             {t(
                               "Saves Book Settings first. Results are unreviewed drafts; you can stop anytime.",
                             )}

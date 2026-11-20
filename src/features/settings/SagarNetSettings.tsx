@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import logo from "../../assets/sagarnet-logo.png";
 import { Icon } from "../../components/Icon";
 import { StatusNotice } from "../../components/StatusNotice";

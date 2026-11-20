@@ -141,7 +141,7 @@ export function UpdateSettings() {
       {state.kind === "available" && state.notes ? (
         <details className="update-settings__notes">
           <summary>{t("What’s new")}</summary>
-          <p>{state.notes}</p>
+          <p className="update-settings__notes-body">{state.notes}</p>
         </details>
       ) : null}
 
