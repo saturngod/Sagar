@@ -519,8 +519,16 @@ export function BookSettingsDialog({
                       className="book-settings__section-title"
                       id="book-settings-batch-heading"
                     >
-                      <Icon name="book" />
-                      {t("Translate all untranslated chapters")}
+                      <Icon name={untranslated === 0 ? "check" : "book"} />
+                      {untranslated === null
+                        ? t("Counting untranslated chapters…")
+                        : untranslated === 0
+                          ? t("Every chapter already has a translation.")
+                          : `${untranslated} ${
+                              untranslated === 1
+                                ? t("untranslated chapter")
+                                : t("untranslated chapters")
+                            }`}
                     </h3>
                     {thisBatchActive && batch ? (
                       <div className="book-settings__batch-status">
@@ -538,47 +546,38 @@ export function BookSettingsDialog({
                       </div>
                     ) : (
                       <>
-                        <div className="book-settings__batch-row">
-                          <label className="form-field book-settings__batch-delay">
-                            <span>{t("Pause between chapters (seconds)")}</span>
-                            <input
-                              type="number"
-                              inputMode="numeric"
-                              min={0}
-                              max={MAX_BATCH_DELAY_SECS}
-                              step={1}
-                              value={
-                                Number.isFinite(settings.batchDelaySecs)
-                                  ? settings.batchDelaySecs
-                                  : ""
-                              }
-                              aria-invalid={!delayValid}
-                              disabled={saving || readingCover || startingBatch}
-                              onChange={(event) => {
-                                const value =
-                                  event.target.value === ""
-                                    ? Number.NaN
-                                    : Number(event.target.value);
-                                setSettings((current) =>
-                                  current
-                                    ? { ...current, batchDelaySecs: value }
-                                    : current,
-                                );
-                              }}
-                            />
-                          </label>
-                          <p className="dialog__muted book-settings__batch-count">
-                            {untranslated === null
-                              ? t("Counting untranslated chapters…")
-                              : untranslated === 0
-                                ? t("Every chapter already has a translation.")
-                                : `${untranslated} ${
-                                    untranslated === 1
-                                      ? t("untranslated chapter")
-                                      : t("untranslated chapters")
-                                  }`}
-                          </p>
-                        </div>
+                        <label className="book-settings__batch-delay">
+                          <span>{t("Pause between chapters")}</span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={MAX_BATCH_DELAY_SECS}
+                            step={1}
+                            value={
+                              Number.isFinite(settings.batchDelaySecs)
+                                ? settings.batchDelaySecs
+                                : ""
+                            }
+                            aria-invalid={!delayValid}
+                            aria-describedby="book-settings-batch-unit"
+                            disabled={saving || readingCover || startingBatch}
+                            onChange={(event) => {
+                              const value =
+                                event.target.value === ""
+                                  ? Number.NaN
+                                  : Number(event.target.value);
+                              setSettings((current) =>
+                                current
+                                  ? { ...current, batchDelaySecs: value }
+                                  : current,
+                              );
+                            }}
+                          />
+                          <span className="dialog__muted" id="book-settings-batch-unit">
+                            {t("seconds")}
+                          </span>
+                        </label>
                         <label className="export-ack">
                           <input
                             type="checkbox"
@@ -588,7 +587,7 @@ export function BookSettingsDialog({
                           />
                           <span>
                             {t(
-                              "Send the text of every untranslated chapter to the selected translation agent, one chapter at a time.",
+                              "Send chapter text to the selected translation agent",
                             )}
                           </span>
                         </label>
@@ -600,7 +599,7 @@ export function BookSettingsDialog({
                         {batchError ? (
                           <StatusNotice kind="error">{t(batchError)}</StatusNotice>
                         ) : null}
-                        <div className="button-row">
+                        <div className="button-row book-settings__batch-actions">
                           <button
                             type="button"
                             className="btn btn--primary"
@@ -618,14 +617,14 @@ export function BookSettingsDialog({
                             <Icon name="sparkles" />
                             {startingBatch ? t("Starting…") : t("Translate all")}
                           </button>
+                          <p className="dialog__muted">
+                            {t(
+                              "Saves Book Settings first. Results are unreviewed drafts; you can stop anytime.",
+                            )}
+                          </p>
                         </div>
                       </>
                     )}
-                    <p className="dialog__muted">
-                      {t(
-                        "Saves Book Settings, then translates chapters in reading order, pausing between chapters. Each result is saved as an unreviewed draft. Chapters that already have text are skipped, and you can stop at any time.",
-                      )}
-                    </p>
                   </section>
                 </div>
               ) : (

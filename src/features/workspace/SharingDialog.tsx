@@ -14,6 +14,7 @@ import {
 import { getBookSettings } from "../../lib/tauri/commands";
 import { toCommandError } from "../../lib/tauri/errors";
 import type { ChapterSummary, ProjectSummary } from "../../types/project";
+import { type TocResult, TocStatus, tocResultMessage } from "../sagarnet/TocStatus";
 import { sanitizePreviewHtml } from "../translator/richText";
 
 type Availability = { available: boolean; host: string | null };
@@ -29,7 +30,7 @@ type Book = {
   /** Chapter count of the first edition. Present in search results and suggestions. */
   chapter_count?: number | null;
 };
-type Edition = { id: number; xhtml_spine_count: number };
+type Edition = { id: number; xhtml_spine_count: number; has_toc?: boolean };
 type BookDetail = Book & { can_manage: boolean; editions: Edition[] };
 type Chapter = {
   id: number;
@@ -466,7 +467,11 @@ export function SharingDialog({
   }
 
   async function createBook() {
-    const created = await read<{ book_id: number; edition_id: number }>("create", {
+    const created = await read<{
+      book_id: number;
+      edition_id: number;
+      toc?: TocResult;
+    }>("create", {
       project: project.id,
       title,
       author,
@@ -480,7 +485,10 @@ export function SharingDialog({
       exact: true,
       chapters: {},
     });
-    setNotice("Book added to SagarNet.");
+    const tocProblem = created.toc ? tocResultMessage(created.toc) : null;
+    setNotice(
+      tocProblem ? `Book added to SagarNet. ${tocProblem}` : "Book added to SagarNet.",
+    );
   }
 
   async function showServerCopy(chapter: number, chapterTitle: string) {
@@ -647,6 +655,20 @@ export function SharingDialog({
     </div>
   );
 
+  // Whether SagarNet has this edition's table of contents, with Upload/Replace for its owner.
+  const tocStatus =
+    account && selection && link?.edition ? (
+      <TocStatus
+        key={`${selection.id}-${link.edition}`}
+        project={project.id}
+        book={selection.id}
+        edition={link.edition}
+        hasToc={selection.editions.find((item) => item.id === link.edition)?.has_toc}
+        canManage={selection.can_manage}
+        disabled={busy}
+      />
+    ) : null;
+
   const chapterCountLabel = (count: number) =>
     `${count} ${count === 1 ? "chapter" : "chapters"}`;
   const editionCount = selection?.editions.find(
@@ -811,6 +833,7 @@ export function SharingDialog({
         {account && selection && link && (
           <>
             {bookCard}
+            {tocStatus}
             {chosenBookControls}
             {selection.visibility === "private" && (
               <div className="sharing-hint">
@@ -1144,6 +1167,7 @@ export function SharingDialog({
         {selection && link ? (
           <>
             {bookCard}
+            {tocStatus}
             {chosenBookControls}
           </>
         ) : matched ? (

@@ -15,6 +15,9 @@ pub struct NavGroup {
 }
 
 pub struct NavEntry {
+    /// The entry's own list item, in the same form as `NavGroup::id`, so a
+    /// parent entry and the group it names can be recognized as one row.
+    pub id: String,
     pub groups: Vec<NavGroup>,
     /// ZIP-root-relative resource path (fragment stripped).
     pub resource: String,
@@ -65,8 +68,14 @@ pub fn parse_nav(bytes: &[u8], nav_path: &str) -> Result<Vec<NavEntry>, AppError
         let mut ancestors: Vec<_> = node
             .ancestors()
             .filter(|ancestor| ancestor.is_element() && ancestor.tag_name().name() == "li")
-            .skip(1)
             .collect();
+        let id = ancestors.first().map_or_else(
+            || format!("nav-a-{}", node.range().start),
+            |li| format!("nav-{}", li.range().start),
+        );
+        if !ancestors.is_empty() {
+            ancestors.remove(0);
+        }
         ancestors.reverse();
         let groups = ancestors
             .into_iter()
@@ -84,6 +93,7 @@ pub fn parse_nav(bytes: &[u8], nav_path: &str) -> Result<Vec<NavEntry>, AppError
             })
             .collect();
         entries.push(NavEntry {
+            id,
             groups,
             resource,
             fragment,
@@ -154,6 +164,7 @@ pub fn parse_ncx(bytes: &[u8], ncx_path: &str) -> Result<Vec<NavEntry>, AppError
             })
             .collect();
         entries.push(NavEntry {
+            id: format!("ncx-{}", point.range().start),
             resource: resolve_href(ncx_path, &href),
             fragment: href
                 .split_once('#')

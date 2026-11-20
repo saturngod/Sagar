@@ -21,6 +21,7 @@ import {
 import { listChapters } from "../../lib/tauri/commands";
 import { toCommandError } from "../../lib/tauri/errors";
 import type { BookSettings, ProjectSummary } from "../../types/project";
+import { type TocResult, TocStatus, tocResultMessage } from "./TocStatus";
 import {
   type UploadItem,
   uploadProgress,
@@ -39,6 +40,7 @@ type BookDetail = {
   title: string;
   visibility: SagarNetVisibility;
   can_manage: boolean;
+  editions?: { id: number; has_toc?: boolean }[];
 };
 type RemoteChapter = { id: number; spine_position: number };
 
@@ -99,6 +101,8 @@ export function UploadAllPanel({
   const [host, setHost] = useState<string | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Why the TOC upload after creating the book did not happen, shown once. */
+  const [tocError, setTocError] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<SagarNetVisibility>("private");
@@ -231,10 +235,19 @@ export function UploadAllPanel({
 
   async function createBook() {
     if (!title.trim()) throw new Error("Enter a book title.");
-    const created = await sagarnetRequest<{ book_id: number; edition_id: number }>(
-      "create",
-      { project: project.id, title, author, description, public: publicBook },
-    );
+    const created = await sagarnetRequest<{
+      book_id: number;
+      edition_id: number;
+      toc?: TocResult;
+    }>("create", {
+      project: project.id,
+      title,
+      author,
+      description,
+      public: publicBook,
+    });
+    const tocProblem = created.toc ? tocResultMessage(created.toc) : null;
+    setTocError(tocProblem ? t(tocProblem) : null);
     saveLink(host, project.id, {
       book: created.book_id,
       edition: created.edition_id,
@@ -265,15 +278,11 @@ export function UploadAllPanel({
     onStarted();
   }
 
-  const accountLine = account ? (
-    <p className="dialog__muted book-settings__account">
-      <Icon name="user" size={16} />
-      {t("Signed in to SagarNet as")} {account.email}
-    </p>
-  ) : null;
-
+  const fieldsDisabled = busy || disabled;
+  let step: 0 | 1 | 2 = 0;
   let body: ReactNode;
   if (thisUploadActive && upload) {
+    step = 2;
     body = (
       <div className="book-settings__batch-status">
         <StatusNotice kind="loading">
@@ -296,20 +305,18 @@ export function UploadAllPanel({
   } else if (view.kind === "signed_out") {
     body = (
       <>
-        <p className="dialog__muted">
-          {t(
-            "Sign in to SagarNet to upload this book’s translations. Your browser opens so you can sign in or create an account.",
-          )}
+        <p className="upload-all__lead">
+          {t("Sign in to SagarNet to upload this book’s translations.")}
         </p>
         <div className="button-row">
           <button
             type="button"
             className="btn btn--primary"
-            disabled={busy || disabled}
+            disabled={fieldsDisabled}
             onClick={() => void act(signIn)}
           >
             <Icon name="user" />
-            {signingIn ? t("Waiting for your browser…") : t("Sign in to SagarNet")}
+            {signingIn ? t("Waiting for your browser…") : t("Sign in")}
           </button>
           {signingIn ? (
             <button
@@ -318,89 +325,90 @@ export function UploadAllPanel({
               onClick={() => void invoke("sharing_cancel_sign_in").catch(() => {})}
             >
               <Icon name="close" />
-              {t("Cancel sign-in")}
+              {t("Cancel")}
             </button>
           ) : null}
         </div>
       </>
     );
   } else if (view.kind === "not_found") {
+    step = 1;
     body = (
       <>
-        {accountLine}
-        <StatusNotice kind="info">
-          {view.suggestions
-            ? `${t("This edition is not on SagarNet yet. Similar books found:")} ${view.suggestions}. ${t(
-                "To link one of them instead, use Upload to SagarNet in the book workspace.",
-              )}`
-            : t("This book is not on SagarNet yet. Create it to upload chapters.")}
-        </StatusNotice>
-        <label className="form-field">
-          <span>{t("Title on SagarNet")}</span>
-          <input
-            value={title}
-            required
-            maxLength={255}
-            disabled={busy || disabled}
-            onKeyDown={keepEnter}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-        </label>
-        <label className="form-field">
-          <span>{t("Author on SagarNet")}</span>
-          <input
-            value={author}
-            maxLength={255}
-            disabled={busy || disabled}
-            onKeyDown={keepEnter}
-            onChange={(event) => setAuthor(event.target.value)}
-          />
-        </label>
-        <label className="form-field">
-          <span>{t("Catalog description")}</span>
-          <textarea
-            rows={3}
-            value={description}
-            maxLength={10000}
-            disabled={busy || disabled}
-            onChange={(event) => setDescription(event.target.value)}
-          />
-        </label>
+        <p className="upload-all__lead">
+          {t("This book isn’t on SagarNet yet. Add it first, then upload chapters.")}
+        </p>
+        <div className="book-settings__fields">
+          <label className="form-field">
+            <span>{t("Title")}</span>
+            <input
+              value={title}
+              required
+              maxLength={255}
+              disabled={fieldsDisabled}
+              onKeyDown={keepEnter}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+          </label>
+          <label className="form-field">
+            <span>{t("Author")}</span>
+            <input
+              value={author}
+              maxLength={255}
+              disabled={fieldsDisabled}
+              onKeyDown={keepEnter}
+              onChange={(event) => setAuthor(event.target.value)}
+            />
+          </label>
+        </div>
+        <details className="settings-help">
+          <summary>
+            <Icon name="paragraph" />
+            {t("Description (optional)")}
+          </summary>
+          <label className="form-field">
+            <span className="visually-hidden">{t("Description")}</span>
+            <textarea
+              rows={3}
+              value={description}
+              maxLength={10000}
+              disabled={fieldsDisabled}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </label>
+        </details>
         <label className="export-ack">
           <input
             type="checkbox"
             checked={publicBook}
-            disabled={busy || disabled}
+            disabled={fieldsDisabled}
             onChange={(event) => setPublicBook(event.target.checked)}
           />
-          <span>
-            {t(
-              "Make the book public. Anyone can find it; your chapters stay private until you publish them.",
-            )}
-          </span>
+          <span>{t("Public book (anyone can find it)")}</span>
         </label>
+        {view.suggestions ? (
+          <p className="dialog__muted">
+            {t(
+              "SagarNet has similar books. To use one of them, open Upload to SagarNet in the book workspace.",
+            )}
+          </p>
+        ) : null}
         <div className="button-row">
           <button
             type="button"
             className="btn btn--primary"
-            disabled={busy || disabled || !title.trim()}
+            disabled={fieldsDisabled || !title.trim()}
             onClick={() => void act(createBook)}
           >
             <Icon name="plus" />
-            {busy ? t("Creating…") : t("Create on SagarNet")}
+            {busy ? t("Adding…") : t("Add book to SagarNet")}
           </button>
         </div>
-        <p className="dialog__muted">
-          {t(
-            "Sends the title, author, description, cover and a fingerprint of each chapter. Chapter text is not sent until you upload.",
-          )}
-        </p>
       </>
     );
   } else if (view.kind === "error") {
     body = (
       <>
-        {accountLine}
         <StatusNotice kind="error" onRetry={() => void load(onlyCompleted)}>
           {view.message}
         </StatusNotice>
@@ -409,7 +417,7 @@ export function UploadAllPanel({
             <button
               type="button"
               className="btn"
-              disabled={busy || disabled}
+              disabled={fieldsDisabled}
               onClick={() => {
                 saveLink(host, project.id, null);
                 void load(onlyCompleted);
@@ -423,105 +431,107 @@ export function UploadAllPanel({
       </>
     );
   } else {
+    step = 2;
     const ready = view;
     const { plan, book } = ready;
+    const count = plan.queue.length;
     const bookPrivate = book.visibility !== "public";
     const publicBlocked = bookPrivate && !book.can_manage;
     const blocked =
-      busy ||
-      disabled ||
+      fieldsDisabled ||
       translating ||
       uploadActive ||
-      !plan.queue.length ||
+      !count ||
       (visibility === "public" && bookPrivate && !publishBook);
+    const skipped = plan.unlinked + plan.incomplete;
     body = (
       <>
-        {accountLine}
-        <p className="book-settings__upload-book">
-          <Icon name={bookPrivate ? "lock" : "globe"} size={16} />
-          <strong>{book.title}</strong>
-          <span className="dialog__muted">
-            {bookPrivate ? t("Private book") : t("Public book")}
-          </span>
+        <p className="upload-all__lead">
+          {count ? (
+            <>
+              <strong>
+                {count} {count === 1 ? t("chapter") : t("chapters")}
+              </strong>{" "}
+              {t("ready to upload to")} <strong>{book.title}</strong>
+            </>
+          ) : (
+            t("No translated chapters to upload yet.")
+          )}
         </p>
-        <p className="dialog__muted book-settings__batch-count">
-          {plan.queue.length}{" "}
-          {plan.queue.length === 1 ? t("chapter to upload") : t("chapters to upload")}
-          {plan.untranslated ? ` · ${plan.untranslated} ${t("untranslated")}` : ""}
-          {plan.incomplete ? ` · ${plan.incomplete} ${t("not completed")}` : ""}
-          {plan.unlinked ? ` · ${plan.unlinked} ${t("not linked")}` : ""}
-        </p>
-        {plan.unlinked ? (
-          <StatusNotice kind="info">
-            {t(
-              "Some translated chapters are not linked to a SagarNet chapter. Link them in Upload to SagarNet in the book workspace.",
-            )}
-          </StatusNotice>
+        <TocStatus
+          key={`${book.id}-${ready.link.edition}`}
+          project={project.id}
+          book={book.id}
+          edition={ready.link.edition}
+          hasToc={book.editions?.find((item) => item.id === ready.link.edition)?.has_toc}
+          canManage={book.can_manage}
+          disabled={fieldsDisabled || uploadActive}
+          initialError={tocError}
+        />
+        {skipped ? (
+          <p className="dialog__muted">
+            {skipped} {t("skipped")}
+            {plan.unlinked ? ` · ${plan.unlinked} ${t("not linked to SagarNet")}` : ""}
+            {plan.incomplete ? ` · ${plan.incomplete} ${t("not completed")}` : ""}
+          </p>
         ) : null}
-        <label className="export-ack">
-          <input
-            type="checkbox"
-            checked={ready.onlyCompleted}
-            disabled={busy || disabled}
-            onChange={(event) => {
-              setOnlyCompleted(event.target.checked);
-              void load(event.target.checked);
-            }}
-          />
-          <span>
-            {t("Only completed chapters (skip drafts and unreviewed AI translations)")}
-          </span>
-        </label>
-        <fieldset className="book-settings__visibility">
-          <legend>{t("Visibility")}</legend>
+        <fieldset className="upload-all__visibility">
+          <legend>{t("Who can read the chapters")}</legend>
           <label className="export-ack">
             <input
               type="radio"
               name="sagarnet-visibility"
               checked={visibility === "private"}
-              disabled={busy || disabled}
+              disabled={fieldsDisabled}
               onChange={() => setVisibility("private")}
             />
-            <span>
-              {t(
-                "Private: new chapters are visible only to you. Chapters you already shared keep their visibility.",
-              )}
-            </span>
+            <span>{t("Only me")}</span>
           </label>
           <label className="export-ack">
             <input
               type="radio"
               name="sagarnet-visibility"
               checked={visibility === "public"}
-              disabled={busy || disabled || publicBlocked}
+              disabled={fieldsDisabled || publicBlocked}
               onChange={() => setVisibility("public")}
             />
             <span>
-              {publicBlocked
-                ? t("Public: unavailable because the book owner keeps this book private.")
-                : t("Public: every uploaded chapter is published for anyone to read.")}
+              {t("Everyone")}
+              {publicBlocked ? ` (${t("the book owner keeps this book private")})` : ""}
             </span>
           </label>
-          {visibility === "public" && bookPrivate && !publicBlocked ? (
-            <label className="export-ack">
-              <input
-                type="checkbox"
-                checked={publishBook}
-                disabled={busy || disabled}
-                onChange={(event) => setPublishBook(event.target.checked)}
-              />
-              <span>{t("Also make this book public on SagarNet.")}</span>
-            </label>
-          ) : null}
         </fieldset>
+        {visibility === "public" && bookPrivate && !publicBlocked ? (
+          <label className="export-ack">
+            <input
+              type="checkbox"
+              checked={publishBook}
+              disabled={fieldsDisabled}
+              onChange={(event) => setPublishBook(event.target.checked)}
+            />
+            <span>{t("Make the book public too")}</span>
+          </label>
+        ) : null}
+        <label className="export-ack">
+          <input
+            type="checkbox"
+            checked={ready.onlyCompleted}
+            disabled={fieldsDisabled}
+            onChange={(event) => {
+              setOnlyCompleted(event.target.checked);
+              void load(event.target.checked);
+            }}
+          />
+          <span>{t("Only completed chapters")}</span>
+        </label>
         {translating ? (
           <StatusNotice kind="info">
-            {t("Translate all is running for this book. Upload when it finishes.")}
+            {t("Wait for Translate all to finish.")}
           </StatusNotice>
         ) : null}
         {uploadActive && upload ? (
           <StatusNotice kind="info">
-            {t("Another book is being uploaded:")} {upload.projectTitle}
+            {t("Another book is uploading:")} {upload.projectTitle}
           </StatusNotice>
         ) : null}
         <div className="button-row">
@@ -532,7 +542,11 @@ export function UploadAllPanel({
             onClick={() => void act(() => startUpload(ready))}
           >
             <Icon name="cloudUpload" />
-            {busy ? t("Starting…") : t("Upload all")}
+            {busy
+              ? t("Starting…")
+              : count
+                ? `${t("Upload")} ${count} ${count === 1 ? t("chapter") : t("chapters")}`
+                : t("Upload")}
           </button>
         </div>
       </>
@@ -541,21 +555,62 @@ export function UploadAllPanel({
 
   return (
     <div className="book-settings__instructions">
-      <section
-        className="book-settings__batch"
-        aria-labelledby="book-settings-upload-heading"
-      >
-        <h3 className="book-settings__section-title" id="book-settings-upload-heading">
-          <Icon name="cloudUpload" />
-          {t("Upload all chapters to SagarNet")}
-        </h3>
+      <section className="upload-all" aria-labelledby="book-settings-upload-heading">
+        <div className="upload-all__header">
+          <h3 className="book-settings__section-title" id="book-settings-upload-heading">
+            <Icon name="cloudUpload" />
+            {t("Upload to SagarNet")}
+          </h3>
+          {account ? (
+            <span className="dialog__muted upload-all__account" title={account.email}>
+              <Icon name="user" size={14} />
+              {account.email}
+            </span>
+          ) : null}
+        </div>
+        {step ? (
+          <ol className="upload-all__steps" aria-label={t("Steps")}>
+            {[t("Add book"), t("Upload chapters")].map((label, index) => (
+              <li
+                key={label}
+                className={
+                  index + 1 === step
+                    ? "upload-all__step upload-all__step--current"
+                    : index + 1 < step
+                      ? "upload-all__step upload-all__step--done"
+                      : "upload-all__step"
+                }
+                aria-current={index + 1 === step ? "step" : undefined}
+              >
+                <span className="upload-all__step-number" aria-hidden="true">
+                  {index + 1 < step ? <Icon name="check" size={12} /> : index + 1}
+                </span>
+                {label}
+              </li>
+            ))}
+          </ol>
+        ) : null}
         {body}
         {error ? <StatusNotice kind="error">{t(error)}</StatusNotice> : null}
-        <p className="dialog__muted">
-          {t(
-            "Uploads the latest saved translation of each linked chapter, one at a time in reading order. Book images are sent inside the chapter, because SagarNet stores images only that way. Unchanged chapters are skipped, and chapters changed on SagarNet since your last upload are not overwritten. You can stop at any time.",
-          )}
-        </p>
+        <details className="settings-help book-settings__help">
+          <summary>
+            <Icon name="keep" />
+            {t("How uploading works")}
+          </summary>
+          <p className="dialog__muted">
+            {t("Chapters upload one at a time, using your latest saved translation.")}
+          </p>
+          <p className="dialog__muted">
+            {t(
+              "Pictures are sent inside each chapter. Your book on this computer is not changed.",
+            )}
+          </p>
+          <p className="dialog__muted">
+            {t(
+              "Unchanged chapters are skipped. Chapters edited on SagarNet since your last upload are never overwritten.",
+            )}
+          </p>
+        </details>
       </section>
     </div>
   );

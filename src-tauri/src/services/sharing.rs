@@ -1,5 +1,6 @@
 //! SagarNet OAuth and opt-in sharing. Source files and credentials stay native.
 
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -15,7 +16,7 @@ use tokio::sync::{Mutex, oneshot};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::epub::{archive::SafeArchive, container, opf, rich_text};
+use crate::epub::{archive::SafeArchive, container, nav::NavEntry, opf, rich_text};
 use crate::error::AppError;
 use crate::security::ArchiveLimits;
 use crate::services::{projects, workspace};
@@ -212,6 +213,15 @@ pub enum Operation {
     Cover {
         book: u64,
     },
+    /// Uploads the book's table of contents to an edition the caller manages
+    /// and that matches this EPUB. Without `replace`, an existing TOC is kept.
+    SyncToc {
+        project: String,
+        book: u64,
+        edition: u64,
+        #[serde(default)]
+        replace: bool,
+    },
     /// Every chapter of an edition, across all pages.
     AllChapters {
         book: u64,
@@ -254,6 +264,19 @@ struct ManifestChapter {
     spine_position: i64,
     label: String,
     source_fingerprint: String,
+}
+
+/// SagarNet's limits for an uploaded table of contents.
+const TOC_LIMIT: usize = 5000;
+const TOC_MAX_LEVEL: usize = 7;
+const TOC_TITLE_LIMIT: usize = 255;
+
+#[derive(Debug, PartialEq, Serialize)]
+struct TocEntry {
+    title: String,
+    level: usize,
+    spine_position: Option<i64>,
+    fragment: Option<String>,
 }
 
 fn failure(message: &'static str) -> AppError {
@@ -868,6 +891,137 @@ fn fingerprint(data_dir: &Path, project_id: &str) -> Result<Fingerprint, AppErro
     })
 }
 
+fn toc_title(value: &str) -> String {
+    value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(TOC_TITLE_LIMIT)
+        .collect()
+}
+
+/// Flattens the EPUB table of contents into SagarNet rows in reading order.
+/// Parent rows without their own link, such as a "Volume 1" heading, are
+/// emitted once before their first child, so every row is at most one level
+/// deeper than the row before it. Only titles and spine positions are sent.
+fn toc_entries(navigation: &[NavEntry], spine: &HashMap<&str, i64>) -> Vec<TocEntry> {
+    let mut seen = HashSet::new();
+    let mut rows = Vec::new();
+    for entry in navigation {
+        let mut level = 0;
+        for group in &entry.groups {
+            let title = toc_title(&group.title);
+            if title.is_empty() {
+                continue;
+            }
+            if seen.insert(group.id.as_str()) {
+                rows.push(TocEntry {
+                    title,
+                    level: level.min(TOC_MAX_LEVEL),
+                    spine_position: group
+                        .resource
+                        .as_deref()
+                        .and_then(|resource| spine.get(resource).copied()),
+                    fragment: None,
+                });
+            }
+            level += 1;
+        }
+        let title = toc_title(&entry.title);
+        if title.is_empty() || !seen.insert(entry.id.as_str()) {
+            continue;
+        }
+        let spine_position = spine.get(entry.resource.as_str()).copied();
+        rows.push(TocEntry {
+            title,
+            level: level.min(TOC_MAX_LEVEL),
+            spine_position,
+            fragment: spine_position
+                .and(entry.fragment.clone())
+                .filter(|fragment| !fragment.is_empty()),
+        });
+    }
+    rows
+}
+
+/// The project's TOC rows plus its fingerprint, read from the immutable snapshot.
+fn local_toc(data_dir: &Path, project_id: &str) -> Result<(Fingerprint, Vec<TocEntry>), AppError> {
+    let manifest = fingerprint(data_dir, project_id)?;
+    let navigation = projects::navigation(data_dir, project_id)?;
+    let chapters = projects::list_chapters(data_dir, project_id)?;
+    let spine = chapters
+        .iter()
+        .map(|chapter| (chapter.resource_href.as_str(), chapter.spine_index))
+        .collect();
+    let entries = toc_entries(&navigation, &spine);
+    Ok((manifest, entries))
+}
+
+/// Uploads the table of contents when the caller manages the edition, it is
+/// this exact EPUB, and it has no TOC yet (or `replace` is set). Returns what
+/// happened, for display.
+#[allow(clippy::too_many_arguments)]
+async fn sync_toc(
+    client: &Client,
+    origin: &Url,
+    token: &str,
+    data_dir: std::path::PathBuf,
+    project: String,
+    book: u64,
+    edition: u64,
+    created: bool,
+    replace: bool,
+) -> Result<&'static str, AppError> {
+    let (manifest, entries) = local_work(move || local_toc(&data_dir, &project)).await?;
+    if !created {
+        let detail: Value = checked(
+            client
+                .get(endpoint(origin, &format!("/api/v1/books/{book}"))?)
+                .bearer_auth(token),
+        )
+        .await?
+        .json()
+        .await
+        .map_err(|_| failure("SagarNet returned an invalid response."))?;
+        if detail["can_manage"].as_bool() != Some(true) {
+            return Ok("not_owner");
+        }
+        let Some(remote) = detail["editions"].as_array().and_then(|editions| {
+            editions
+                .iter()
+                .find(|item| item["id"].as_u64() == Some(edition))
+        }) else {
+            return Ok("different_edition");
+        };
+        if !replace && remote["has_toc"].as_bool() != Some(false) {
+            return Ok("present");
+        }
+        if remote["fingerprint_version"].as_u64() != Some(u64::from(manifest.fingerprint_version))
+            || remote["source_fingerprint"].as_str() != Some(manifest.source_fingerprint.as_str())
+        {
+            return Ok("different_edition");
+        }
+    }
+    if entries.is_empty() {
+        return Ok("none");
+    }
+    if entries.len() > TOC_LIMIT {
+        return Ok("too_large");
+    }
+    checked(
+        client
+            .put(endpoint(
+                origin,
+                &format!("/api/v1/books/{book}/editions/{edition}/toc"),
+            )?)
+            .bearer_auth(token)
+            .json(&json!({ "entries": entries })),
+    )
+    .await?;
+    Ok("uploaded")
+}
+
 const COVER_LIMIT: usize = 2 * 1024 * 1024;
 
 /// Identifies a cover image by its leading bytes, so a mislabeled response is never shown.
@@ -1148,6 +1302,7 @@ pub async fn request(
                 | Operation::Create { .. }
                 | Operation::Save { .. }
                 | Operation::UploadChapter { .. }
+                | Operation::SyncToc { .. }
                 | Operation::Delete { .. }
         )
     {
@@ -1155,6 +1310,22 @@ pub async fn request(
             "sharing_unauthorized",
             "Sign in to SagarNet before changing shares.",
         ));
+    }
+    if let Operation::SyncToc {
+        project,
+        book,
+        edition,
+        replace,
+    } = operation
+    {
+        let Some(token) = token else {
+            return Err(failure("Sign in to SagarNet before changing shares."));
+        };
+        let status = sync_toc(
+            &client, &origin, &token, data_dir, project, book, edition, false, replace,
+        )
+        .await?;
+        return Ok(json!({ "toc": status }));
     }
     if let Operation::AllChapters { book, edition } = operation {
         let mut chapters = Vec::new();
@@ -1241,6 +1412,10 @@ pub async fn request(
         ));
     }
     let checking_account = matches!(operation, Operation::Account);
+    let creating = match &operation {
+        Operation::Create { project, .. } => Some((project.clone(), data_dir.clone())),
+        _ => None,
+    };
     let reading_translation = matches!(operation, Operation::Translation { .. });
     let builder = match operation {
         Operation::Account => client.get(api("me")?),
@@ -1361,6 +1536,7 @@ pub async fn request(
         Operation::LocalPreview { .. }
         | Operation::Cover { .. }
         | Operation::AllChapters { .. }
+        | Operation::SyncToc { .. }
         | Operation::UploadChapter { .. } => {
             return Err(failure("The preview could not be opened."));
         }
@@ -1449,10 +1625,28 @@ pub async fn request(
     if response.status() == StatusCode::NO_CONTENT {
         return Ok(Value::Null);
     }
+    let created = response.status() == StatusCode::CREATED;
     let mut body: Value = response
         .json()
         .await
         .map_err(|_| failure("SagarNet returned an invalid response."))?;
+    if let Some((project, data_dir)) = creating {
+        // The book exists now, so a TOC problem is reported, not raised.
+        let status = match (body["book_id"].as_u64(), body["edition_id"].as_u64()) {
+            (Some(book), Some(edition)) => {
+                match access(&mut session, &client, &settings, &origin).await {
+                    Ok(Some(token)) => sync_toc(
+                        &client, &origin, &token, data_dir, project, book, edition, created, false,
+                    )
+                    .await
+                    .unwrap_or("failed"),
+                    _ => "failed",
+                }
+            }
+            _ => "failed",
+        };
+        body["toc"] = json!(status);
+    }
     if reading_translation {
         match body["content_format_version"].as_u64() {
             Some(1) => {}
@@ -1556,6 +1750,74 @@ mod tests {
             .expect("import fixture")
             .project;
         fingerprint(&data, &project.id).expect("fingerprint")
+    }
+
+    #[test]
+    fn flattens_volume_toc_with_unlinked_headings_into_levels() {
+        let nav = br#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body>
+<nav epub:type="toc"><ol>
+  <li><a href="text/cover.xhtml">Cover</a></li>
+  <li><span>Volume   1</span><ol>
+    <li><a href="text/c1.xhtml#start">Chapter 1</a></li>
+    <li><a href="text/c2.xhtml">Chapter 2</a><ol>
+      <li><a href="text/c2.xhtml#s1">Section</a></li>
+    </ol></li>
+  </ol></li>
+  <li><a href="text/v2.xhtml">Volume 2</a><ol>
+    <li><a href="text/c3.xhtml">Chapter 1</a></li>
+    <li><a href="notes/outside.xhtml#n">Notes</a></li>
+  </ol></li>
+</ol></nav></body></html>"#;
+        let navigation = crate::epub::nav::parse_nav(nav, "OPS/nav.xhtml").expect("nav fixture");
+        let spine = HashMap::from([
+            ("OPS/text/cover.xhtml", 0),
+            ("OPS/text/c1.xhtml", 1),
+            ("OPS/text/c2.xhtml", 2),
+            ("OPS/text/v2.xhtml", 3),
+            ("OPS/text/c3.xhtml", 4),
+        ]);
+        let row = |title: &str, level, spine_position, fragment: Option<&str>| TocEntry {
+            title: title.to_string(),
+            level,
+            spine_position,
+            fragment: fragment.map(str::to_string),
+        };
+        assert_eq!(
+            toc_entries(&navigation, &spine),
+            vec![
+                row("Cover", 0, Some(0), None),
+                row("Volume 1", 0, None, None),
+                row("Chapter 1", 1, Some(1), Some("start")),
+                row("Chapter 2", 1, Some(2), None),
+                row("Section", 2, Some(2), Some("s1")),
+                row("Volume 2", 0, Some(3), None),
+                row("Chapter 1", 1, Some(4), None),
+                row("Notes", 1, None, None),
+            ]
+        );
+    }
+
+    #[test]
+    fn caps_toc_levels_and_title_length_for_sagarnet() {
+        let deep = (0..10).fold(
+            String::from("<a href=\"c.xhtml\">Leaf</a>"),
+            |inner, depth| format!("<a href=\"c.xhtml\">L{depth}</a><ol><li>{inner}</li></ol>"),
+        );
+        let long = "x".repeat(300);
+        let nav = format!(
+            r#"<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body><nav epub:type="toc"><ol><li><a href="c.xhtml">{long}</a></li><li>{deep}</li></ol></nav></body></html>"#
+        );
+        let navigation = crate::epub::nav::parse_nav(nav.as_bytes(), "nav.xhtml").expect("nav");
+        let rows = toc_entries(&navigation, &HashMap::from([("c.xhtml", 0)]));
+        assert_eq!(rows[0].title.chars().count(), TOC_TITLE_LIMIT);
+        assert_eq!(rows[0].level, 0);
+        assert!(rows.iter().all(|row| row.level <= TOC_MAX_LEVEL));
+        assert!(
+            rows.windows(2)
+                .all(|pair| pair[1].level <= pair[0].level + 1)
+        );
+        assert_eq!(rows.len(), 12);
     }
 
     #[test]

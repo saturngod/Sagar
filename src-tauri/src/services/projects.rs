@@ -34,26 +34,7 @@ pub fn list_chapters(data_dir: &Path, project_id: &str) -> Result<Vec<ChapterSum
     let mut chapters = projects::list_chapters(&conn, project_id)?;
     // Navigation is immutable source metadata, so existing projects need no migration.
     // Books already imported with missing/unreadable navigation keep the flat list.
-    let navigation = (|| -> Result<Vec<epub::nav::NavEntry>, AppError> {
-        let relative: String = conn.query_row(
-            "SELECT source_snapshot_path FROM projects WHERE id = ?1",
-            [project_id],
-            |row| row.get(0),
-        )?;
-        let mut archive = epub::archive::SafeArchive::open(
-            &snapshot_abs_path(data_dir, &relative)?,
-            &crate::security::ArchiveLimits::default(),
-        )?;
-        let opf_path = epub::container::find_opf_path(&mut archive)?;
-        let opf = epub::opf::parse_opf(&archive.read_entry(&opf_path)?, &opf_path)?;
-        match opf.nav_href {
-            Some(path) => epub::nav::parse_nav(&archive.read_entry(&path)?, &path),
-            None => match opf.ncx_href {
-                Some(path) => epub::nav::parse_ncx(&archive.read_entry(&path)?, &path),
-                None => Ok(Vec::new()),
-            },
-        }
-    })();
+    let navigation = read_navigation(&conn, data_dir, project_id);
     if let Ok(entries) = navigation {
         let mut by_resource = std::collections::HashMap::new();
         for entry in &entries {
@@ -66,6 +47,38 @@ pub fn list_chapters(data_dir: &Path, project_id: &str) -> Result<Vec<ChapterSum
         }
     }
     Ok(chapters)
+}
+
+/// The table of contents (EPUB 3 nav, else EPUB 2 NCX) from the project's
+/// immutable snapshot, in reading order. A book without one returns no entries.
+pub fn navigation(data_dir: &Path, project_id: &str) -> Result<Vec<epub::nav::NavEntry>, AppError> {
+    let conn = open_project_database(data_dir)?;
+    read_navigation(&conn, data_dir, project_id)
+}
+
+fn read_navigation(
+    conn: &rusqlite::Connection,
+    data_dir: &Path,
+    project_id: &str,
+) -> Result<Vec<epub::nav::NavEntry>, AppError> {
+    let relative: String = conn.query_row(
+        "SELECT source_snapshot_path FROM projects WHERE id = ?1",
+        [project_id],
+        |row| row.get(0),
+    )?;
+    let mut archive = epub::archive::SafeArchive::open(
+        &snapshot_abs_path(data_dir, &relative)?,
+        &crate::security::ArchiveLimits::default(),
+    )?;
+    let opf_path = epub::container::find_opf_path(&mut archive)?;
+    let opf = epub::opf::parse_opf(&archive.read_entry(&opf_path)?, &opf_path)?;
+    match opf.nav_href {
+        Some(path) => epub::nav::parse_nav(&archive.read_entry(&path)?, &path),
+        None => match opf.ncx_href {
+            Some(path) => epub::nav::parse_ncx(&archive.read_entry(&path)?, &path),
+            None => Ok(Vec::new()),
+        },
+    }
 }
 
 /// Reads the declared cover image from the project's immutable snapshot.

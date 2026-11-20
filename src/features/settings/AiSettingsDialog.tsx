@@ -20,6 +20,7 @@ import type {
 import { UpdateSettings } from "../updates/UpdateControls";
 import { type AppearancePreferences, AppearanceSettings } from "./AppearanceSettings";
 import { ContentServerSettings } from "./ContentServerSettings";
+import { SagarNetSettings } from "./SagarNetSettings";
 import { TranslationModelSection } from "./TranslationModelSection";
 import { TranslationSkillsSettings } from "./TranslationSkillsSettings";
 
@@ -95,7 +96,13 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
   const [form, setForm] = useState<CustomFormState>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
   const [tab, setTab] = useState<
-    "appearance" | "providers" | "translation" | "skills" | "server" | "updates"
+    | "appearance"
+    | "providers"
+    | "translation"
+    | "skills"
+    | "server"
+    | "sagarnet"
+    | "updates"
   >("appearance");
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -356,7 +363,10 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
             value={form.baseUrl}
             placeholder={protocolDefaults[form.protocol].baseUrl}
             onChange={(event) =>
-              setForm((current) => ({ ...current, baseUrl: event.target.value }))
+              setForm((current) => ({
+                ...current,
+                baseUrl: event.target.value,
+              }))
             }
             aria-invalid={form.fieldErrors.baseUrl !== undefined}
           />
@@ -395,7 +405,10 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
               maxLength={128}
               placeholder={protocolDefaults[form.protocol].model}
               onChange={(event) =>
-                setForm((current) => ({ ...current, model: event.target.value }))
+                setForm((current) => ({
+                  ...current,
+                  model: event.target.value,
+                }))
               }
               aria-invalid={form.fieldErrors.model !== undefined}
             />
@@ -458,7 +471,7 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
   return (
     <div className="dialog-backdrop">
       <div
-        className="dialog"
+        className="dialog dialog--settings"
         role="dialog"
         aria-modal="true"
         aria-labelledby="ai-settings-title"
@@ -480,429 +493,486 @@ export function AiSettingsDialog({ onClose, appearance }: AiSettingsDialogProps)
           </button>
         </div>
 
-        <div
-          className="tabs settings-tabs"
-          role="tablist"
-          aria-label={t("Settings sections")}
-          onKeyDown={(event) => {
-            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
-              return;
-            }
-            event.preventDefault();
-            const tabs = [
-              "appearance",
-              "providers",
-              "translation",
-              "skills",
-              "server",
-              "updates",
-            ] as const;
-            const direction = event.key === "ArrowRight" ? 1 : -1;
-            const next =
-              tabs[(tabs.indexOf(tab) + direction + tabs.length) % tabs.length];
-            setTab(next);
-            document.getElementById(`ai-tab-${next}`)?.focus();
-          }}
-        >
-          <button
-            type="button"
-            role="tab"
-            id="ai-tab-appearance"
-            aria-selected={tab === "appearance"}
-            aria-controls="ai-panel-appearance"
-            tabIndex={tab === "appearance" ? 0 : -1}
-            className="tab"
-            onClick={() => setTab("appearance")}
+        <div className="settings-layout">
+          <div
+            className="tabs settings-tabs"
+            role="tablist"
+            aria-orientation="vertical"
+            aria-label={t("Settings sections")}
+            onKeyDown={(event) => {
+              const forward = event.key === "ArrowRight" || event.key === "ArrowDown";
+              const backward = event.key === "ArrowLeft" || event.key === "ArrowUp";
+              if (!forward && !backward) {
+                return;
+              }
+              event.preventDefault();
+              const tabs = [
+                "appearance",
+                "providers",
+                "translation",
+                "skills",
+                "server",
+                "sagarnet",
+                "updates",
+              ] as const;
+              const direction = forward ? 1 : -1;
+              const next =
+                tabs[(tabs.indexOf(tab) + direction + tabs.length) % tabs.length];
+              setTab(next);
+              document.getElementById(`ai-tab-${next}`)?.focus();
+            }}
           >
-            <Icon name="sun" />
-            {t("Appearance")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="ai-tab-providers"
-            aria-selected={tab === "providers"}
-            aria-controls="ai-panel-providers"
-            tabIndex={tab === "providers" ? 0 : -1}
-            className="tab"
-            onClick={() => setTab("providers")}
-          >
-            <Icon name="sparkles" />
-            {t("Providers")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="ai-tab-translation"
-            aria-selected={tab === "translation"}
-            aria-controls="ai-panel-translation"
-            tabIndex={tab === "translation" ? 0 : -1}
-            className="tab"
-            onClick={() => setTab("translation")}
-            title={t("Translation Model")}
-          >
-            <Icon name="languages" />
-            {t("Model")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="ai-tab-skills"
-            aria-selected={tab === "skills"}
-            aria-controls="ai-panel-skills"
-            tabIndex={tab === "skills" ? 0 : -1}
-            className="tab"
-            onClick={() => setTab("skills")}
-            title={t("Translation skills")}
-          >
-            <Icon name="book" />
-            {t("Skills")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="ai-tab-server"
-            aria-selected={tab === "server"}
-            aria-controls="ai-panel-server"
-            tabIndex={tab === "server" ? 0 : -1}
-            className="tab"
-            onClick={() => setTab("server")}
-            title={t("Content server")}
-          >
-            <Icon name="server" />
-            {t("Server")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="ai-tab-updates"
-            aria-selected={tab === "updates"}
-            aria-controls="ai-panel-updates"
-            tabIndex={tab === "updates" ? 0 : -1}
-            className="tab"
-            onClick={() => setTab("updates")}
-            title={t("App updates")}
-          >
-            <Icon name="download" />
-            {t("Updates")}
-          </button>
-        </div>
-
-        <div
-          role="tabpanel"
-          id="ai-panel-updates"
-          aria-labelledby="ai-tab-updates"
-          hidden={tab !== "updates"}
-        >
-          <UpdateSettings />
-        </div>
-
-        <div
-          role="tabpanel"
-          id="ai-panel-server"
-          aria-labelledby="ai-tab-server"
-          hidden={tab !== "server"}
-        >
-          <ContentServerSettings enabled={tab === "server"} />
-        </div>
-
-        <div
-          role="tabpanel"
-          id="ai-panel-skills"
-          aria-labelledby="ai-tab-skills"
-          hidden={tab !== "skills"}
-        >
-          <TranslationSkillsSettings enabled={tab === "skills"} />
-        </div>
-
-        <div
-          role="tabpanel"
-          id="ai-panel-appearance"
-          aria-labelledby="ai-tab-appearance"
-          hidden={tab !== "appearance"}
-        >
-          <AppearanceSettings {...appearance} />
-        </div>
-
-        {(tab === "providers" || tab === "translation") && loadError ? (
-          <StatusNotice kind="error" onRetry={loadProviders}>
-            {loadError}
-          </StatusNotice>
-        ) : null}
-        {(tab === "providers" || tab === "translation") && !loadError && !providers ? (
-          <StatusNotice kind="loading">{t("Loading AI providers…")}</StatusNotice>
-        ) : null}
-
-        {providers ? (
-          <>
-            <div
-              role="tabpanel"
-              id="ai-panel-providers"
-              aria-labelledby="ai-tab-providers"
-              hidden={tab !== "providers"}
+            <button
+              type="button"
+              role="tab"
+              id="ai-tab-appearance"
+              aria-selected={tab === "appearance"}
+              aria-controls="ai-panel-appearance"
+              tabIndex={tab === "appearance" ? 0 : -1}
+              className="tab"
+              onClick={() => setTab("appearance")}
             >
-              <section className="provider-section" aria-labelledby="ai-cli-heading">
-                <h3 className="panel__heading" id="ai-cli-heading">
-                  {t("Coding assistants")}
-                </h3>
-                <ul className="provider-tiles">
-                  {providers.cli.map((provider) => {
-                    const result = checkResults[provider.id];
-                    const isChecking = checking[provider.id] ?? false;
-                    const tone = result?.connected
-                      ? "reviewed"
-                      : result || !provider.available
-                        ? "original"
-                        : "available";
-                    return (
-                      <li key={provider.id} className="provider-tile">
-                        <div className="provider-tile__info">
-                          <strong title={provider.label}>{provider.label}</strong>
-                          <span
-                            className={`provider-status provider-status--${tone}`}
-                            role="status"
-                          >
-                            {isChecking
-                              ? t("Checking…")
-                              : result?.connected
-                                ? t("Connected")
-                                : result
-                                  ? t("Failed")
-                                  : provider.available
-                                    ? t("Available")
-                                    : t("Not found")}
-                            {result?.version ? ` · ${result.version}` : ""}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          className="icon-button provider-action"
-                          disabled={isChecking}
-                          aria-label={`${t("Check")} ${provider.label}`}
-                          title={`${t("Check")} ${provider.label}`}
-                          onClick={() => void handleCheck(provider.id)}
-                        >
-                          <Icon name="refresh" spin={isChecking} />
-                        </button>
-                        {result && !result.connected ? (
-                          <p className="provider-tile__feedback" role="alert">
-                            {result.message}
-                          </p>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
+              <Icon name="sun" />
+              {t("Appearance")}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="ai-tab-providers"
+              aria-selected={tab === "providers"}
+              aria-controls="ai-panel-providers"
+              tabIndex={tab === "providers" ? 0 : -1}
+              className="tab"
+              onClick={() => setTab("providers")}
+            >
+              <Icon name="sparkles" />
+              {t("Providers")}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="ai-tab-translation"
+              aria-selected={tab === "translation"}
+              aria-controls="ai-panel-translation"
+              tabIndex={tab === "translation" ? 0 : -1}
+              className="tab"
+              onClick={() => setTab("translation")}
+              title={t("Translation Model")}
+            >
+              <Icon name="languages" />
+              {t("Model")}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="ai-tab-skills"
+              aria-selected={tab === "skills"}
+              aria-controls="ai-panel-skills"
+              tabIndex={tab === "skills" ? 0 : -1}
+              className="tab"
+              onClick={() => setTab("skills")}
+              title={t("Translation skills")}
+            >
+              <Icon name="book" />
+              {t("Skills")}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="ai-tab-server"
+              aria-selected={tab === "server"}
+              aria-controls="ai-panel-server"
+              tabIndex={tab === "server" ? 0 : -1}
+              className="tab"
+              onClick={() => setTab("server")}
+              title={t("Content server")}
+            >
+              <Icon name="server" />
+              {t("Server")}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="ai-tab-sagarnet"
+              aria-selected={tab === "sagarnet"}
+              aria-controls="ai-panel-sagarnet"
+              tabIndex={tab === "sagarnet" ? 0 : -1}
+              className="tab"
+              onClick={() => setTab("sagarnet")}
+              title={t("SagarNet account")}
+            >
+              <Icon name="globe" />
+              SagarNet
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="ai-tab-updates"
+              aria-selected={tab === "updates"}
+              aria-controls="ai-panel-updates"
+              tabIndex={tab === "updates" ? 0 : -1}
+              className="tab"
+              onClick={() => setTab("updates")}
+              title={t("App updates")}
+            >
+              <Icon name="download" />
+              {t("Updates")}
+            </button>
+          </div>
 
-              <section className="provider-section" aria-labelledby="ai-custom-heading">
-                <div className="provider-section__header">
-                  <h3 className="panel__heading" id="ai-custom-heading">
-                    {t("Custom providers")}
-                    {providers.custom.length > 0 ? (
-                      <span className="provider-count">{providers.custom.length}</span>
-                    ) : null}
-                  </h3>
-                  <div className="provider-section__tools">
-                    {providers.custom.length > 4 ? (
-                      <label className="library-search provider-search">
-                        <Icon name="search" size={16} />
-                        <input
-                          type="search"
-                          aria-label={t("Search providers")}
-                          placeholder={t("Search providers")}
-                          value={providerQuery}
-                          onChange={(event) => setProviderQuery(event.target.value)}
-                        />
-                      </label>
-                    ) : null}
-                    {!formOpen ? (
-                      <button
-                        type="button"
-                        className="btn btn--small"
-                        onClick={openAddForm}
-                      >
-                        <Icon name="plus" />
-                        {t("Add provider")}
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-                {formOpen && !form.editingId ? renderProviderForm() : null}
-                {providers.custom.length === 0 ? (
-                  <p className="dialog__muted">{t("No custom providers yet.")}</p>
-                ) : visibleCustom.length === 0 ? (
-                  <p className="dialog__muted">{t("No providers match your search.")}</p>
-                ) : (
-                  <ul className="provider-list">
-                    {visibleCustom.map((provider) => {
-                      const result = testResults[provider.id];
-                      const isTesting = testing[provider.id] ?? false;
-                      const expanded =
-                        expandedProvider === provider.id || confirmDelete === provider.id;
-                      const protocol = protocolLabel(provider.protocol);
-                      const editing = formOpen && form.editingId === provider.id;
-                      return (
-                        <li key={provider.id}>
-                          <div className="provider-row">
-                            <button
-                              type="button"
-                              className="provider-row__toggle"
-                              aria-expanded={expanded}
-                              aria-controls={`provider-details-${provider.id}`}
-                              title={t("Connection details")}
-                              onClick={() => {
-                                setConfirmDelete(null);
-                                setExpandedProvider(expanded ? null : provider.id);
-                              }}
-                            >
-                              <span className="provider-row__chevron" aria-hidden="true">
-                                <Icon name="chevronDown" size={16} />
-                              </span>
-                              <strong>{provider.name}</strong>
-                              <span className="provider-row__meta">
-                                {protocol} · {provider.model}
-                              </span>
-                            </button>
-                            <span
-                              className={`provider-status provider-status--${result?.ok ? "reviewed" : "original"}`}
-                              role="status"
-                            >
-                              {isTesting
-                                ? t("Testing…")
-                                : result
-                                  ? result.ok
-                                    ? t("Connected")
-                                    : t("Failed")
-                                  : t("Saved")}
-                            </span>
-                            <button
-                              type="button"
-                              className="icon-button provider-action"
-                              disabled={isTesting}
-                              aria-label={`${t("Test")} ${provider.name}`}
-                              title={`${t("Test")} ${provider.name}`}
-                              onClick={() => void handleTest(provider.id)}
-                            >
-                              <Icon name="refresh" spin={isTesting} />
-                            </button>
-                          </div>
-                          {result ? (
-                            <p
-                              className="provider-row__feedback"
-                              role={result.ok ? "status" : "alert"}
-                            >
-                              {result.message}
-                            </p>
-                          ) : null}
-                          <div
-                            id={`provider-details-${provider.id}`}
-                            className="provider-row__details"
-                            hidden={!expanded || editing}
-                          >
-                            <dl>
-                              <dt>{t("Protocol")}</dt>
-                              <dd>{protocol}</dd>
-                              <dt>{t("Model")}</dt>
-                              <dd>{provider.model}</dd>
-                              <dt>{t("Base URL")}</dt>
-                              <dd>{provider.baseUrl}</dd>
-                              <dt>{t("API key")}</dt>
-                              <dd>{provider.hasApiKey ? t("key saved") : t("no key")}</dd>
-                            </dl>
-                            {confirmDelete === provider.id ? (
-                              <div className="provider-row__confirm">
-                                <p className="provider-row__confirm-label">
-                                  {t("Delete provider?")} <strong>{provider.name}</strong>
+          <div className="settings-layout__content">
+            <div className="settings-layout__inner">
+              <div
+                role="tabpanel"
+                id="ai-panel-updates"
+                aria-labelledby="ai-tab-updates"
+                hidden={tab !== "updates"}
+              >
+                <UpdateSettings />
+              </div>
+
+              <div
+                role="tabpanel"
+                id="ai-panel-sagarnet"
+                aria-labelledby="ai-tab-sagarnet"
+                hidden={tab !== "sagarnet"}
+              >
+                <SagarNetSettings enabled={tab === "sagarnet"} />
+              </div>
+
+              <div
+                role="tabpanel"
+                id="ai-panel-server"
+                aria-labelledby="ai-tab-server"
+                hidden={tab !== "server"}
+              >
+                <ContentServerSettings enabled={tab === "server"} />
+              </div>
+
+              <div
+                role="tabpanel"
+                id="ai-panel-skills"
+                aria-labelledby="ai-tab-skills"
+                hidden={tab !== "skills"}
+              >
+                <TranslationSkillsSettings enabled={tab === "skills"} />
+              </div>
+
+              <div
+                role="tabpanel"
+                id="ai-panel-appearance"
+                aria-labelledby="ai-tab-appearance"
+                hidden={tab !== "appearance"}
+              >
+                <AppearanceSettings {...appearance} />
+              </div>
+
+              {(tab === "providers" || tab === "translation") && loadError ? (
+                <StatusNotice kind="error" onRetry={loadProviders}>
+                  {loadError}
+                </StatusNotice>
+              ) : null}
+              {(tab === "providers" || tab === "translation") &&
+              !loadError &&
+              !providers ? (
+                <StatusNotice kind="loading">{t("Loading AI providers…")}</StatusNotice>
+              ) : null}
+
+              {providers ? (
+                <>
+                  <div
+                    role="tabpanel"
+                    id="ai-panel-providers"
+                    aria-labelledby="ai-tab-providers"
+                    hidden={tab !== "providers"}
+                  >
+                    <section
+                      className="provider-section"
+                      aria-labelledby="ai-cli-heading"
+                    >
+                      <h3 className="panel__heading" id="ai-cli-heading">
+                        {t("Coding assistants")}
+                      </h3>
+                      <ul className="provider-tiles">
+                        {providers.cli.map((provider) => {
+                          const result = checkResults[provider.id];
+                          const isChecking = checking[provider.id] ?? false;
+                          const tone = result?.connected
+                            ? "reviewed"
+                            : result || !provider.available
+                              ? "original"
+                              : "available";
+                          return (
+                            <li key={provider.id} className="provider-tile">
+                              <div className="provider-tile__info">
+                                <strong title={provider.label}>{provider.label}</strong>
+                                <span
+                                  className={`provider-status provider-status--${tone}`}
+                                  role="status"
+                                >
+                                  {isChecking
+                                    ? t("Checking…")
+                                    : result?.connected
+                                      ? t("Connected")
+                                      : result
+                                        ? t("Failed")
+                                        : provider.available
+                                          ? t("Available")
+                                          : t("Not found")}
+                                  {result?.version ? ` · ${result.version}` : ""}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                className="icon-button provider-action"
+                                disabled={isChecking}
+                                aria-label={`${t("Check")} ${provider.label}`}
+                                title={`${t("Check")} ${provider.label}`}
+                                onClick={() => void handleCheck(provider.id)}
+                              >
+                                <Icon name="refresh" spin={isChecking} />
+                              </button>
+                              {result && !result.connected ? (
+                                <p className="provider-tile__feedback" role="alert">
+                                  {result.message}
                                 </p>
-                                <div className="button-row">
+                              ) : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+
+                    <section
+                      className="provider-section"
+                      aria-labelledby="ai-custom-heading"
+                    >
+                      <div className="provider-section__header">
+                        <h3 className="panel__heading" id="ai-custom-heading">
+                          {t("Custom providers")}
+                          {providers.custom.length > 0 ? (
+                            <span className="provider-count">
+                              {providers.custom.length}
+                            </span>
+                          ) : null}
+                        </h3>
+                        <div className="provider-section__tools">
+                          {providers.custom.length > 4 ? (
+                            <label className="library-search provider-search">
+                              <Icon name="search" size={16} />
+                              <input
+                                type="search"
+                                aria-label={t("Search providers")}
+                                placeholder={t("Search providers")}
+                                value={providerQuery}
+                                onChange={(event) => setProviderQuery(event.target.value)}
+                              />
+                            </label>
+                          ) : null}
+                          {!formOpen ? (
+                            <button
+                              type="button"
+                              className="btn btn--small"
+                              onClick={openAddForm}
+                            >
+                              <Icon name="plus" />
+                              {t("Add provider")}
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                      {formOpen && !form.editingId ? renderProviderForm() : null}
+                      {providers.custom.length === 0 ? (
+                        <p className="dialog__muted">{t("No custom providers yet.")}</p>
+                      ) : visibleCustom.length === 0 ? (
+                        <p className="dialog__muted">
+                          {t("No providers match your search.")}
+                        </p>
+                      ) : (
+                        <ul className="provider-list">
+                          {visibleCustom.map((provider) => {
+                            const result = testResults[provider.id];
+                            const isTesting = testing[provider.id] ?? false;
+                            const expanded =
+                              expandedProvider === provider.id ||
+                              confirmDelete === provider.id;
+                            const protocol = protocolLabel(provider.protocol);
+                            const editing = formOpen && form.editingId === provider.id;
+                            return (
+                              <li key={provider.id}>
+                                <div className="provider-row">
                                   <button
                                     type="button"
-                                    className="btn btn--small"
-                                    disabled={busyDelete}
-                                    onClick={() => setConfirmDelete(null)}
+                                    className="provider-row__toggle"
+                                    aria-expanded={expanded}
+                                    aria-controls={`provider-details-${provider.id}`}
+                                    title={t("Connection details")}
+                                    onClick={() => {
+                                      setConfirmDelete(null);
+                                      setExpandedProvider(expanded ? null : provider.id);
+                                    }}
                                   >
-                                    <Icon name="close" />
-                                    {t("Cancel")}
+                                    <span
+                                      className="provider-row__chevron"
+                                      aria-hidden="true"
+                                    >
+                                      <Icon name="chevronDown" size={16} />
+                                    </span>
+                                    <strong>{provider.name}</strong>
+                                    <span className="provider-row__meta">
+                                      {protocol} · {provider.model}
+                                    </span>
                                   </button>
+                                  <span
+                                    className={`provider-status provider-status--${result?.ok ? "reviewed" : "original"}`}
+                                    role="status"
+                                  >
+                                    {isTesting
+                                      ? t("Testing…")
+                                      : result
+                                        ? result.ok
+                                          ? t("Connected")
+                                          : t("Failed")
+                                        : t("Saved")}
+                                  </span>
                                   <button
                                     type="button"
-                                    className="btn btn--small btn--danger"
-                                    disabled={busyDelete}
-                                    onClick={() => void handleDelete(provider.id)}
+                                    className="icon-button provider-action"
+                                    disabled={isTesting}
+                                    aria-label={`${t("Test")} ${provider.name}`}
+                                    title={`${t("Test")} ${provider.name}`}
+                                    onClick={() => void handleTest(provider.id)}
                                   >
-                                    <Icon name="trash" />
-                                    {busyDelete ? t("Deleting…") : t("Confirm delete")}
+                                    <Icon name="refresh" spin={isTesting} />
                                   </button>
                                 </div>
-                              </div>
-                            ) : (
-                              <div className="button-row provider-row__detail-actions">
-                                <button
-                                  type="button"
-                                  className="btn btn--small"
-                                  onClick={() => openEditForm(provider)}
+                                {result ? (
+                                  <p
+                                    className="provider-row__feedback"
+                                    role={result.ok ? "status" : "alert"}
+                                  >
+                                    {result.message}
+                                  </p>
+                                ) : null}
+                                <div
+                                  id={`provider-details-${provider.id}`}
+                                  className="provider-row__details"
+                                  hidden={!expanded || editing}
                                 >
-                                  <Icon name="edit" />
-                                  {t("Edit")}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn--small"
-                                  disabled={busyDelete}
-                                  onClick={() => void handleDelete(provider.id)}
-                                >
-                                  <Icon name="trash" />
-                                  {t("Delete")}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                          {editing ? renderProviderForm() : null}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-              <details className="settings-help">
-                <summary>
-                  <Icon name="keep" />
-                  {t("Connection help")}
-                </summary>
-                <p className="dialog__muted">
-                  {t(
-                    "Detected from tools installed on this computer. Select Check to verify a tool responds.",
-                  )}
-                </p>
-                <p className="dialog__muted">
-                  {t(
-                    "OpenAI, Gemini and Anthropic-compatible endpoints: a base URL, an API key and a model. Test requests only the model list.",
-                  )}
-                </p>
-                <p className="dialog__muted">
-                  {t(
-                    "API keys stay on this computer in the app database and are never shown again. Settings never send book text; a connection test only requests the provider's model list.",
-                  )}
-                </p>
-              </details>
+                                  <dl>
+                                    <dt>{t("Protocol")}</dt>
+                                    <dd>{protocol}</dd>
+                                    <dt>{t("Model")}</dt>
+                                    <dd>{provider.model}</dd>
+                                    <dt>{t("Base URL")}</dt>
+                                    <dd>{provider.baseUrl}</dd>
+                                    <dt>{t("API key")}</dt>
+                                    <dd>
+                                      {provider.hasApiKey ? t("key saved") : t("no key")}
+                                    </dd>
+                                  </dl>
+                                  {confirmDelete === provider.id ? (
+                                    <div className="provider-row__confirm">
+                                      <p className="provider-row__confirm-label">
+                                        {t("Delete provider?")}{" "}
+                                        <strong>{provider.name}</strong>
+                                      </p>
+                                      <div className="button-row">
+                                        <button
+                                          type="button"
+                                          className="btn btn--small"
+                                          disabled={busyDelete}
+                                          onClick={() => setConfirmDelete(null)}
+                                        >
+                                          <Icon name="close" />
+                                          {t("Cancel")}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn btn--small btn--danger"
+                                          disabled={busyDelete}
+                                          onClick={() => void handleDelete(provider.id)}
+                                        >
+                                          <Icon name="trash" />
+                                          {busyDelete
+                                            ? t("Deleting…")
+                                            : t("Confirm delete")}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="button-row provider-row__detail-actions">
+                                      <button
+                                        type="button"
+                                        className="btn btn--small"
+                                        onClick={() => openEditForm(provider)}
+                                      >
+                                        <Icon name="edit" />
+                                        {t("Edit")}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn btn--small"
+                                        disabled={busyDelete}
+                                        onClick={() => void handleDelete(provider.id)}
+                                      >
+                                        <Icon name="trash" />
+                                        {t("Delete")}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                                {editing ? renderProviderForm() : null}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </section>
+                    <details className="settings-help">
+                      <summary>
+                        <Icon name="keep" />
+                        {t("Connection help")}
+                      </summary>
+                      <p className="dialog__muted">
+                        {t(
+                          "Detected from tools installed on this computer. Select Check to verify a tool responds.",
+                        )}
+                      </p>
+                      <p className="dialog__muted">
+                        {t(
+                          "OpenAI, Gemini and Anthropic-compatible endpoints: a base URL, an API key and a model. Test requests only the model list.",
+                        )}
+                      </p>
+                      <p className="dialog__muted">
+                        {t(
+                          "API keys stay on this computer in the app database and are never shown again. Settings never send book text; a connection test only requests the provider's model list.",
+                        )}
+                      </p>
+                    </details>
 
-              {actionError ? (
-                <StatusNotice kind="error">{actionError}</StatusNotice>
+                    {actionError ? (
+                      <StatusNotice kind="error">{actionError}</StatusNotice>
+                    ) : null}
+                  </div>
+                  <div
+                    role="tabpanel"
+                    id="ai-panel-translation"
+                    aria-labelledby="ai-tab-translation"
+                    hidden={tab !== "translation"}
+                  >
+                    {tab === "translation" ? (
+                      <TranslationModelSection
+                        cli={providers.cli}
+                        custom={providers.custom}
+                      />
+                    ) : null}
+                  </div>
+                </>
               ) : null}
             </div>
-            <div
-              role="tabpanel"
-              id="ai-panel-translation"
-              aria-labelledby="ai-tab-translation"
-              hidden={tab !== "translation"}
-            >
-              {tab === "translation" ? (
-                <TranslationModelSection cli={providers.cli} custom={providers.custom} />
-              ) : null}
-            </div>
-          </>
-        ) : null}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -3836,18 +3836,87 @@ button {
 }
 
 /* Server controls share the settings form and notice patterns. */
-/* One row of short tabs; scrolls sideways instead of wrapping when narrow. */
-.settings-tabs {
-  flex-wrap: nowrap;
-  /* Never let the dialog's column layout squeeze the tab row's height. */
+/* Settings fills the window: header, then a section sidebar beside the content. */
+.dialog-backdrop:has(> .dialog--settings) {
+  place-items: stretch;
+}
+.dialog.dialog--settings {
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.dialog--settings > .panel__header {
   flex-shrink: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
+  margin: 0;
+  padding: var(--space-3) var(--space-6);
+  border-bottom: var(--border-subtle);
+}
+.settings-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+.settings-tabs {
+  flex-direction: column;
+  gap: var(--space-1);
+  /* Tab border (1px) + padding put each icon on the header title's 24px edge. */
+  padding: var(--space-4) calc(var(--space-6) - var(--space-3) - 1px);
+  border-bottom: 0;
+  border-right: var(--border-subtle);
+  background: var(--color-bg);
+  overflow-y: auto;
 }
 .settings-tabs .tab {
   flex: none;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 34px;
   white-space: nowrap;
+}
+.settings-layout__content {
+  min-height: 0;
+  overflow-y: auto;
+}
+.settings-layout__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 860px;
+  margin: 0 auto;
+  padding: var(--space-6);
+}
+/* Each section starts flush with the content padding. */
+.settings-layout__inner > [role="tabpanel"] > :first-child {
+  margin-top: 0;
+}
+/* Narrow windows: the sidebar becomes one scrolling row of tabs above the content. */
+@media (max-width: 720px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .settings-tabs {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    padding: var(--space-2) var(--space-4);
+    border-right: 0;
+    border-bottom: var(--border-subtle);
+  }
+  .settings-tabs .tab {
+    width: auto;
+  }
+  .settings-layout__inner {
+    padding: var(--space-4);
+  }
 }
 .content-server-settings {
   display: grid;
@@ -4132,6 +4201,28 @@ button {
 .sharing-hint__text {
   flex: 1 1 240px;
   margin: 0;
+}
+
+.toc-status .sharing-hint__text {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.toc-status__icon {
+  display: inline-flex;
+  flex: none;
+  padding-top: 2px;
+}
+
+.toc-status__message {
+  flex: 1 0 100%;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.toc-status__message--error {
+  color: var(--color-error);
 }
 
 .sharing-form {
@@ -4816,18 +4907,42 @@ button {
 }
 
 /* Book Settings → translate all untranslated chapters */
-.book-settings__batch-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+.book-settings__batch {
+  display: grid;
   gap: var(--space-3);
 }
 .book-settings__batch-delay {
-  width: 14rem;
-  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
 }
-.book-settings__batch-count {
-  margin: 0 0 var(--space-2);
+.book-settings__batch-delay input {
+  width: 5rem;
+  height: var(--control-height);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+  color: var(--color-text);
+  padding: 0 var(--space-2);
+  font: inherit;
+}
+.book-settings__batch-delay input[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+.book-settings__batch .export-ack {
+  align-items: center;
+  margin: 0;
+}
+.book-settings__batch-actions {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+}
+.book-settings__batch-actions > p {
+  margin: 0;
+  font-size: var(--text-sm);
 }
 .book-settings__batch-status {
   display: flex;
@@ -4841,25 +4956,109 @@ button {
 }
 
 /* Book Settings → upload all chapters to SagarNet */
-.book-settings__account,
-.book-settings__upload-book {
+.upload-all {
+  display: grid;
+  gap: var(--space-3);
+}
+.upload-all__header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
-  margin: 0 0 var(--space-2);
-  overflow-wrap: anywhere;
 }
-.book-settings__visibility {
-  display: grid;
+.upload-all__header .book-settings__section-title {
+  margin: 0;
+}
+.upload-all__account {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 100%;
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-all__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.upload-all__step {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-2);
-  margin: 0 0 var(--space-3);
+}
+.upload-all__step--current {
+  color: var(--color-text);
+  font-weight: 600;
+}
+.upload-all__step-number {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  font-size: var(--text-xs);
+}
+.upload-all__step--current .upload-all__step-number {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+.upload-all__step--done .upload-all__step-number {
+  border-color: var(--color-success-border);
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+.upload-all__lead {
+  margin: 0;
+  font-size: var(--text-base);
+}
+.upload-all .button-row,
+.upload-all .settings-help,
+.upload-all .dialog__muted {
+  margin: 0;
+}
+.upload-all__visibility {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
   padding: 0;
   border: 0;
   min-width: 0;
 }
-.book-settings__visibility legend {
+.upload-all__visibility legend {
+  width: 100%;
   margin-bottom: var(--space-2);
+  padding: 0;
   font-size: var(--text-sm);
   font-weight: 600;
+}
+.sagarnet-settings__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.sagarnet-settings__brand .panel__heading {
+  margin: 0;
+}
+/* The logo is a white glyph; paint it with the text color so it shows in both themes. */
+.sagarnet-settings__logo {
+  display: block;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  background-color: var(--color-text);
+  -webkit-mask: var(--sagarnet-logo) center / contain no-repeat;
+  mask: var(--sagarnet-logo) center / contain no-repeat;
 }
