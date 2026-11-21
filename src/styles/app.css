@@ -606,6 +606,33 @@ button {
   font-size: var(--text-sm);
 }
 
+/* Common EPUB structural semantics. Book CSS is untrusted and not loaded,
+   so the source preview (data-epub-type) and the editor (epub:type) share
+   readable defaults for chapter openers such as Standard Ebooks headers. */
+:is(.book-text, .rich-block) hgroup {
+  margin: 0 0 1.5em;
+}
+:is(.book-text, .rich-block) hgroup > :is(h1, h2, h3, h4, h5, h6) {
+  margin-bottom: 0.35em;
+}
+:is(.book-text, .rich-block) hgroup > p {
+  margin: 0;
+}
+:is(.book-text, .rich-block) :is([data-epub-type~="title"], [epub\:type~="title"]),
+:is(.book-text, .rich-block) :is([data-epub-type~="subtitle"], [epub\:type~="subtitle"]) {
+  font-variant: small-caps;
+  font-size: 1.15em;
+}
+:is(.book-text, .rich-block)
+  :is([data-epub-type~="bridgehead"], [epub\:type~="bridgehead"]) {
+  margin: 0 0 1.5em;
+  font-style: italic;
+}
+/* Match the editor's paragraph rhythm so stanzas and paragraphs separate. */
+.book-text p + p {
+  margin-top: 1em;
+}
+
 .book-text a {
   color: var(--color-accent);
   text-underline-offset: 2px;

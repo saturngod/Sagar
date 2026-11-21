@@ -68,6 +68,38 @@ fn serialize_safe(
         serialize_svg(element, out, base_resource, resource_prefix);
         return;
     }
+    // Active, form, embedded and metadata content is dropped with its
+    // subtree; it never renders in the read-only pane.
+    if matches!(
+        tag.as_str(),
+        "script"
+            | "style"
+            | "noscript"
+            | "template"
+            | "iframe"
+            | "frame"
+            | "frameset"
+            | "object"
+            | "embed"
+            | "applet"
+            | "form"
+            | "input"
+            | "button"
+            | "select"
+            | "textarea"
+            | "link"
+            | "meta"
+            | "base"
+            | "head"
+            | "title"
+            | "audio"
+            | "video"
+            | "canvas"
+            | "math"
+    ) || element.tag_name().namespace() != Some("http://www.w3.org/1999/xhtml")
+    {
+        return;
+    }
     if !matches!(
         tag.as_str(),
         "body"
@@ -76,8 +108,30 @@ fn serialize_safe(
             | "article"
             | "main"
             | "header"
+            | "hgroup"
+            | "nav"
+            | "address"
             | "footer"
             | "aside"
+            | "dl"
+            | "dt"
+            | "dd"
+            | "caption"
+            | "tfoot"
+            | "cite"
+            | "abbr"
+            | "small"
+            | "q"
+            | "mark"
+            | "dfn"
+            | "var"
+            | "samp"
+            | "kbd"
+            | "del"
+            | "ins"
+            | "bdi"
+            | "bdo"
+            | "wbr"
             | "figure"
             | "figcaption"
             | "p"
@@ -119,10 +173,24 @@ fn serialize_safe(
             | "picture"
             | "source"
     ) {
+        // Unknown but passive XHTML (e.g. `big`, `center`, `figure`-like
+        // custom wrappers): render its content without the element so book
+        // text is never silently hidden from the reader.
+        serialize_children_safe(element, out, base_resource, resource_prefix);
         return;
     }
     out.push('<');
     out.push_str(&tag);
+    // EPUB structural semantics (e.g. `title`, `bridgehead`, `label`) let the
+    // pane style common book patterns without loading untrusted book CSS.
+    if let Some(types) = element.attribute(("http://www.idpf.org/2007/ops", "type")) {
+        let types = types.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !types.is_empty() {
+            out.push_str(" data-epub-type=\"");
+            out.push_str(&escape_html_text(&types));
+            out.push('"');
+        }
+    }
     for attr in element.attributes() {
         let name = attr.name().to_ascii_lowercase();
         if is_event_attribute(&name)
@@ -183,15 +251,7 @@ fn serialize_safe(
         .any(|c| c.is_element() || c.text().is_some_and(|t| !t.is_empty()));
     if has_children {
         out.push('>');
-        for child in element.children() {
-            if child.is_element() {
-                serialize_safe(child, out, base_resource, resource_prefix, None);
-            } else if child.is_text()
-                && let Some(text) = child.text()
-            {
-                out.push_str(&escape_html_text(text));
-            }
-        }
+        serialize_children_safe(element, out, base_resource, resource_prefix);
         out.push_str("</");
         out.push_str(&tag);
         out.push('>');
@@ -199,6 +259,23 @@ fn serialize_safe(
         out.push_str("></");
         out.push_str(&tag);
         out.push('>');
+    }
+}
+
+fn serialize_children_safe(
+    element: roxmltree::Node<'_, '_>,
+    out: &mut String,
+    base_resource: &str,
+    resource_prefix: &str,
+) {
+    for child in element.children() {
+        if child.is_element() {
+            serialize_safe(child, out, base_resource, resource_prefix, None);
+        } else if child.is_text()
+            && let Some(text) = child.text()
+        {
+            out.push_str(&escape_html_text(text));
+        }
     }
 }
 
@@ -406,6 +483,36 @@ mod tests {
         assert!(html.contains("href=\"\""), "{html}");
         assert!(!sanitize("<img src=\"https://example.com/a.png\"/>").contains("https://"));
         assert!(!sanitize("<script>evil()</script><iframe src=\"a.xhtml\"/>").contains("evil"));
+    }
+
+    #[test]
+    fn hgroup_headings_and_epub_semantics_are_rendered() {
+        // Standard Ebooks chapter opener (e.g. The Odyssey, Book I).
+        let html = sanitize_fragment(
+            r#"<body epub:type="bodymatter"><section id="book-1" epub:type="chapter z3998:poem"><header><hgroup><h2><span epub:type="label">Book</span> <span epub:type="ordinal z3998:roman">I</span></h2><p epub:type="title">Visit of Pallas to Telemachus</p></hgroup><p epub:type="bridgehead">A council of the gods</p></header><p><span>Tell me, O Muse</span><br/><span>Who, having</span></p></section></body>"#,
+            "body",
+            "epub/text/book-1.xhtml",
+            "epubres://pid",
+        );
+        assert!(html.contains("<hgroup><h2><span data-epub-type=\"label\">Book</span> <span data-epub-type=\"ordinal z3998:roman\">I</span></h2>"), "{html}");
+        assert!(
+            html.contains("<p data-epub-type=\"title\">Visit of Pallas to Telemachus</p>"),
+            "{html}"
+        );
+        assert!(
+            html.contains("<p data-epub-type=\"bridgehead\">A council of the gods</p>"),
+            "{html}"
+        );
+        assert!(html.contains("<span>Tell me, O Muse</span><br/>"), "{html}");
+    }
+
+    #[test]
+    fn unknown_passive_elements_keep_their_text() {
+        assert_eq!(
+            sanitize("<big>Large <em>text</em></big> <center>mid</center>"),
+            "Large <em>text</em> mid"
+        );
+        assert_eq!(sanitize("a<noscript>b</noscript><object>c</object>d"), "ad");
     }
 
     #[test]
