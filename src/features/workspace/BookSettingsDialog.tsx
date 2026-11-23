@@ -11,11 +11,17 @@ import {
 } from "../../lib/tauri/commands";
 import type {
   BookSettings,
+  ChapterSummary,
   ProjectSummary,
   TranslationSkillSummary,
 } from "../../types/project";
 import { UploadAllPanel } from "../sagarnet/UploadAllPanel";
-import { untranslatedChapters, useAiBatch, useNow } from "../translator/aiBatch";
+import {
+  chaptersInRange,
+  untranslatedChapters,
+  useAiBatch,
+  useNow,
+} from "../translator/aiBatch";
 import { batchProgress, batchStateLabel } from "../translator/BatchTranslationBar";
 import { TranslationSkillPicker } from "./TranslationSkillPicker";
 
@@ -56,19 +62,36 @@ export function BookSettingsDialog({
   const thisBatchActive = batchActive && batch?.projectId === project.id;
   const now = useNow(thisBatchActive);
   const [untranslated, setUntranslated] = useState<number | null>(null);
+  const [untranslatedList, setUntranslatedList] = useState<ChapterSummary[]>([]);
+  const [fromId, setFromId] = useState("");
+  const [toId, setToId] = useState("");
   const [batchConsent, setBatchConsent] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
   const [startingBatch, setStartingBatch] = useState(false);
   const batchProcessed = batch?.processed;
+  const fromIndex = fromId ? untranslatedList.findIndex((c) => c.id === fromId) : 0;
+  const toIndex = toId
+    ? untranslatedList.findIndex((c) => c.id === toId)
+    : untranslatedList.length - 1;
+  const rangeValid = fromIndex >= 0 && toIndex >= 0 && fromIndex <= toIndex;
+  const rangeCount = rangeValid
+    ? chaptersInRange(untranslatedList, fromId || undefined, toId || undefined).length
+    : 0;
   // biome-ignore lint/correctness/useExhaustiveDependencies: batchProcessed recounts as the batch saves chapters.
   useEffect(() => {
     let disposed = false;
     listChapters(project.id)
       .then((chapters) => {
-        if (!disposed) setUntranslated(untranslatedChapters(chapters).length);
+        if (disposed) return;
+        const list = untranslatedChapters(chapters);
+        setUntranslatedList(list);
+        setUntranslated(list.length);
       })
       .catch(() => {
-        if (!disposed) setUntranslated(null);
+        if (!disposed) {
+          setUntranslated(null);
+          setUntranslatedList([]);
+        }
       });
     return () => {
       disposed = true;
@@ -173,6 +196,10 @@ export function BookSettingsDialog({
     settings.batchDelaySecs <= MAX_BATCH_DELAY_SECS;
   async function translateAll() {
     if (!settings || saving || startingBatch || batchActive || !batchConsent) return;
+    if (!rangeValid) {
+      setBatchError("Choose a From chapter that comes before the To chapter.");
+      return;
+    }
     if (!delayValid) {
       setBatchError(`Enter a pause between 0 and ${MAX_BATCH_DELAY_SECS} seconds.`);
       return;
@@ -188,6 +215,8 @@ export function BookSettingsDialog({
         projectId: project.id,
         projectTitle: updated.title,
         delaySecs: settings.batchDelaySecs,
+        fromChapterId: fromId || undefined,
+        toChapterId: toId || undefined,
       });
       onClose();
     } catch (failure) {
@@ -577,6 +606,47 @@ export function BookSettingsDialog({
                             {t("seconds")}
                           </span>
                         </label>
+                        <div className="book-settings__batch-range">
+                          <label className="book-settings__batch-delay">
+                            <span>{t("From")}</span>
+                            <select
+                              className="book-settings__batch-select"
+                              value={fromId}
+                              aria-invalid={!rangeValid}
+                              disabled={!untranslated || startingBatch}
+                              onChange={(event) => setFromId(event.target.value)}
+                            >
+                              <option value="">{t("First untranslated")}</option>
+                              {untranslatedList.map((chapter) => (
+                                <option key={chapter.id} value={chapter.id}>
+                                  {chapter.spineIndex + 1}. {chapter.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="book-settings__batch-delay">
+                            <span>{t("To")}</span>
+                            <select
+                              className="book-settings__batch-select"
+                              value={toId}
+                              aria-invalid={!rangeValid}
+                              disabled={!untranslated || startingBatch}
+                              onChange={(event) => setToId(event.target.value)}
+                            >
+                              <option value="">{t("Last untranslated")}</option>
+                              {untranslatedList.map((chapter) => (
+                                <option key={chapter.id} value={chapter.id}>
+                                  {chapter.spineIndex + 1}. {chapter.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <span className="dialog__muted" role="status">
+                            {rangeValid
+                              ? `${rangeCount} ${t(rangeCount === 1 ? "chapter selected" : "chapters selected")}`
+                              : t("From must come before To.")}
+                          </span>
+                        </div>
                         <label className="export-ack">
                           <input
                             type="checkbox"
@@ -603,6 +673,7 @@ export function BookSettingsDialog({
                             disabled={
                               !batchConsent ||
                               !untranslated ||
+                              !rangeValid ||
                               !delayValid ||
                               batchActive ||
                               saving ||
@@ -612,7 +683,11 @@ export function BookSettingsDialog({
                             onClick={() => void translateAll()}
                           >
                             <Icon name="sparkles" />
-                            {startingBatch ? t("Starting…") : t("Translate all")}
+                            {startingBatch
+                              ? t("Starting…")
+                              : fromId || toId
+                                ? t("Translate range")
+                                : t("Translate all")}
                           </button>
                           <p className="dialog__muted book-settings__batch-hint">
                             {t(

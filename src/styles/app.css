@@ -4954,6 +4954,23 @@ button {
   padding: 0 var(--space-2);
   font: inherit;
 }
+.book-settings__batch-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.book-settings__batch-select {
+  max-width: 16rem;
+  height: var(--control-height);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+  color: var(--color-text);
+  padding: 0 var(--space-2);
+  font: inherit;
+}
+.book-settings__batch-select[aria-invalid="true"],
 .book-settings__batch-input[aria-invalid="true"] {
   border-color: var(--color-error);
 }

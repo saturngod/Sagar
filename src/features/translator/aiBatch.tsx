@@ -53,6 +53,9 @@ export type BatchStartInput = {
   projectId: string;
   projectTitle: string;
   delaySecs: number;
+  /** Optional inclusive range of untranslated chapters (by id). */
+  fromChapterId?: string;
+  toChapterId?: string;
 };
 
 type AiBatchValue = {
@@ -81,6 +84,20 @@ export function untranslatedChapters(chapters: ChapterSummary[]): ChapterSummary
   return chapters.filter(
     (chapter) => chapter.status === "not_started" && chapter.totalBlocks > 0,
   );
+}
+
+/** Inclusive slice of `chapters` between the from and to ids (either may be omitted). */
+export function chaptersInRange(
+  chapters: ChapterSummary[],
+  fromId?: string,
+  toId?: string,
+): ChapterSummary[] {
+  const from = fromId ? chapters.findIndex((chapter) => chapter.id === fromId) : 0;
+  const to = toId
+    ? chapters.findIndex((chapter) => chapter.id === toId)
+    : chapters.length - 1;
+  if (from < 0 || to < 0) return [];
+  return chapters.slice(from, to + 1);
 }
 
 function sleep(ms: number, signal: { stopped: boolean }): Promise<void> {
@@ -296,7 +313,11 @@ export function AiBatchProvider({ children }: { children: ReactNode }) {
             "No translation agent selected yet. Choose one in Library → AI settings → Translation Model.",
           );
         }
-        const queue = untranslatedChapters(await listChapters(input.projectId));
+        const queue = chaptersInRange(
+          untranslatedChapters(await listChapters(input.projectId)),
+          input.fromChapterId,
+          input.toChapterId,
+        );
         if (!queue.length) throw new Error("Every chapter already has a translation.");
         signal.current = { stopped: false };
         setBatch({
