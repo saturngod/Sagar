@@ -193,6 +193,10 @@ export const ja: Record<string, string> = {
   "Select more": "追加で選択",
   "Cancel translation": "翻訳をキャンセル",
   "Whole chapter": "章全体",
+  "Improve translation": "翻訳を改善",
+  "Send this chapter’s translation to": "この章の翻訳を送信先:",
+  "Retry improves the whole translation again.":
+    "再試行すると翻訳全体をもう一度改善します。",
   "Selected paragraphs": "選択した段落",
   "Translation mode": "翻訳モード",
   "Translated title": "翻訳後のタイトル",

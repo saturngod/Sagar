@@ -412,6 +412,7 @@ pub async fn start_ai_translation(
     previous_output: Option<String>,
     current_instructions: Option<String>,
     reasoning_effort: Option<String>,
+    improve_html: Option<String>,
 ) -> Result<AiTranslationStart, AppError> {
     let data_dir = app_data_dir(&app)?;
     let emitter = app.clone();
@@ -426,6 +427,7 @@ pub async fn start_ai_translation(
                 previous_output,
                 current_instructions,
                 reasoning_effort,
+                improve_html,
             },
             move |event: AiTranslationEvent| {
                 let _ = emitter.emit("ai-translation-event", event);

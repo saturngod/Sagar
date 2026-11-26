@@ -193,6 +193,10 @@ export const my: Record<string, string> = {
   "Select more": "ထပ်ရွေးရန်",
   "Cancel translation": "ဘာသာပြန်မှု ပယ်ဖျက်ရန်",
   "Whole chapter": "အခန်းတစ်ခုလုံး",
+  "Improve translation": "ဘာသာပြန်ကို ပိုကောင်းအောင်လုပ်ရန်",
+  "Send this chapter’s translation to": "ဤအခန်း၏ ဘာသာပြန်ကို ပို့ရန်",
+  "Retry improves the whole translation again.":
+    "ပြန်ကြိုးစားပါက ဘာသာပြန်တစ်ခုလုံးကို ထပ်မံ ပိုကောင်းအောင် လုပ်ပါမည်။",
   "Selected paragraphs": "ရွေးထားသော စာပိုဒ်များ",
   "Translation mode": "ဘာသာပြန် နည်းလမ်း",
   "Translated title": "ဘာသာပြန် ခေါင်းစဉ်",

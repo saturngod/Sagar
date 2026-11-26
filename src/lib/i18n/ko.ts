@@ -193,6 +193,10 @@ export const ko: Record<string, string> = {
   "Select more": "더 선택",
   "Cancel translation": "번역 취소",
   "Whole chapter": "챕터 전체",
+  "Improve translation": "번역 개선",
+  "Send this chapter’s translation to": "이 챕터의 번역을 다음으로 보내기:",
+  "Retry improves the whole translation again.":
+    "다시 시도하면 전체 번역을 처음부터 다시 개선합니다.",
   "Selected paragraphs": "선택한 문단",
   "Translation mode": "번역 모드",
   "Translated title": "번역된 제목",

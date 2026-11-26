@@ -1179,6 +1179,7 @@ mod tests {
                         previous_output: previous.map(str::to_string),
                         current_instructions: Some("Use formal prose.".into()),
                         reasoning_effort: None,
+                        improve_html: None,
                     },
                     move |event| {
                         send.send(event).unwrap();

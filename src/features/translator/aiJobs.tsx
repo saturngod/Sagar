@@ -42,6 +42,11 @@ export type AiJob = {
   inserted: boolean;
   /** An open dialog owns the run; the background bar stays out of the way. */
   foreground: boolean;
+  /**
+   * Draft HTML an Improve run started from. The result replaces the draft
+   * automatically only while the draft still matches it.
+   */
+  improveBase: string | null;
 };
 
 export type AiJobInput = {
@@ -52,6 +57,7 @@ export type AiJobInput = {
   mode: string;
   runId?: string | null;
   foreground?: boolean;
+  improveBase?: string | null;
 };
 
 type AiJobsValue = {
@@ -176,6 +182,7 @@ export function AiJobsProvider({ children }: { children: ReactNode }) {
             runId: input.runId ?? null,
             inserted: false,
             foreground: input.foreground ?? true,
+            improveBase: input.improveBase ?? null,
           },
         ];
       });

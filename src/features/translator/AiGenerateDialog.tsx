@@ -4,14 +4,18 @@ import { Icon } from "../../components/Icon";
 import { StatusNotice } from "../../components/StatusNotice";
 import { formatDuration } from "../../lib/duration";
 import { useTranslation } from "../../lib/i18n";
-import { formatDirection } from "../../lib/languages";
+import { formatDirection, languageName } from "../../lib/languages";
 import {
   cancelAiTranslation,
   getTranslationSelection,
   listAiProviders,
   startAiTranslation,
 } from "../../lib/tauri/ai";
-import { getProject } from "../../lib/tauri/commands";
+import {
+  getBookSettings,
+  getProject,
+  listTranslationSkills,
+} from "../../lib/tauri/commands";
 import { CommandError } from "../../lib/tauri/errors";
 import type {
   AiProviderList,
@@ -30,6 +34,15 @@ type Phase = "idle" | "running" | "proposal" | "failed";
 
 /** Silence before a running job shows a stall warning (job keeps running). */
 const STALL_WARNING_AFTER_SECS = 120;
+
+type Mode = "whole" | "selected" | "improve";
+
+/** Prefilled run instructions for improving an existing translation. */
+function improveInstructions(category: string | null, target: string | null): string {
+  // Names like "Myanmar · မြန်မာ" read better in the prompt as "Myanmar".
+  const language = target?.split(" · ")[0] ?? "the target language";
+  return `Improve to readable ${category ?? "book"} style for ${language}`;
+}
 
 function plainText(html: string): string {
   return new DOMParser().parseFromString(html, "text/html").body.textContent ?? "";
@@ -74,7 +87,9 @@ export function AiGenerateDialog({
   const [elapsed, setElapsed] = useState(0);
   const [stalledSecs, setStalledSecs] = useState(0);
   const [eventsDead, setEventsDead] = useState(false);
-  const [mode, setMode] = useState<"whole" | "selected">("whole");
+  const [mode, setMode] = useState<Mode>("whole");
+  /** Genre skill label from Book Settings, used by the improve prefill. */
+  const [category, setCategory] = useState<string | null>(null);
   const [selectedBusy, setSelectedBusy] = useState(false);
   const appendPending = useRef(false);
   appendPending.current = editor.appending ?? false;
@@ -87,6 +102,8 @@ export function AiGenerateDialog({
   const finishedJobIds = useRef(new Set<string>());
   const closed = useRef(false);
   const pendingEvents = useRef<AiTranslationEvent[]>([]);
+  /** Draft HTML the owned Improve run started from, or null for translation. */
+  const improveBase = useRef<string | null>(null);
   const receiveEvent = useRef<(event: AiTranslationEvent) => void>(() => {});
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -189,6 +206,14 @@ export function AiGenerateDialog({
             : "AI settings could not be loaded.",
         );
       });
+    // The genre only shapes the improve prefill; failing to load it is harmless.
+    Promise.all([getBookSettings(projectId), listTranslationSkills()])
+      .then(([settings, skills]) => {
+        if (cancelled || !settings.genreSkillId) return;
+        const genre = skills.find((skill) => skill.id === settings.genreSkillId);
+        setCategory(genre?.label ?? null);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -235,8 +260,15 @@ export function AiGenerateDialog({
           current.draft &&
           !current.draft.conflict &&
           !hasContent(current.draft.html ?? "");
+        // An Improve result replaces the draft it was made from; if the draft
+        // was edited during the run it waits for explicit Insert instead.
+        const unchangedImproveBase =
+          improveBase.current !== null &&
+          current.draft &&
+          !current.draft.conflict &&
+          current.draft.html === improveBase.current;
         jobId.current = null;
-        if (emptyDraft) {
+        if (emptyDraft || unchangedImproveBase) {
           // Fresh chapters go straight into the Rich editor; anything with
           // content stays for explicit Insert confirmation below.
           current.setHtml(payload.proposalHtml);
@@ -318,6 +350,7 @@ export function AiGenerateDialog({
     );
     if (active && !jobId.current && !starting.current) {
       jobId.current = active.jobId;
+      improveBase.current = active.improveBase;
       ownedJobId.current = active.jobId;
       setForeground(active.jobId, true);
       setPhase("running");
@@ -330,6 +363,21 @@ export function AiGenerateDialog({
         job.proposalHtml &&
         !job.inserted,
     );
+    const draft = editorRef.current.draft;
+    if (
+      finished?.proposalHtml &&
+      finished.improveBase !== null &&
+      draft &&
+      !draft.conflict &&
+      draft.html === finished.improveBase
+    ) {
+      // An Improve run that finished in the background applies itself as
+      // soon as the dialog sees it, like one that finished in the foreground.
+      editorRef.current.setHtml(finished.proposalHtml);
+      markInserted(finished.jobId);
+      closeRef.current();
+      return;
+    }
     if (finished?.proposalHtml && phase !== "proposal" && !proposal) {
       // The dialog owns the review now; the draft stays untouched until the
       // user inserts the proposal.
@@ -339,7 +387,7 @@ export function AiGenerateDialog({
       ownedJobId.current = finished.jobId;
       setForeground(finished.jobId, true);
     }
-  }, [chapterId, jobs, phase, proposal, setForeground]);
+  }, [chapterId, jobs, markInserted, phase, proposal, setForeground]);
 
   const handleGenerate = useCallback(async () => {
     if (!selection || !consent || jobId.current || starting.current) {
@@ -353,7 +401,10 @@ export function AiGenerateDialog({
     setApiTrace([]);
     setNotice(null);
     setProposal(null);
-    const previousOutput = streamed;
+    const improveHtml = mode === "improve" ? editor.draft?.html : undefined;
+    improveBase.current = improveHtml ?? null;
+    // Improve runs always start over; only translation resumes earlier output.
+    const previousOutput = improveHtml ? "" : streamed;
     setConfirmInsert(false);
     setCopied(false);
     try {
@@ -365,6 +416,7 @@ export function AiGenerateDialog({
         previousOutput,
         currentInstructions,
         reasoningEffort: selection.reasoningEffort,
+        improveHtml,
       });
       starting.current = false;
       const detached = closed.current || !mounted.current;
@@ -373,7 +425,8 @@ export function AiGenerateDialog({
         projectId,
         chapterId,
         chapterTitle,
-        mode: t("Whole chapter"),
+        mode: improveHtml ? t("Improve translation") : t("Whole chapter"),
+        improveBase: improveHtml ?? null,
         foreground: !detached,
       });
       if (detached) {
@@ -399,6 +452,8 @@ export function AiGenerateDialog({
     chapterTitle,
     consent,
     currentInstructions,
+    editor.draft?.html,
+    mode,
     projectId,
     selection,
     streamed,
@@ -446,6 +501,34 @@ export function AiGenerateDialog({
   }, [proposal]);
 
   const running = phase === "running";
+  const canImprove = hasContent(editor.draft?.html ?? "");
+  const improvePrefill = improveInstructions(
+    category,
+    project ? languageName(project.targetLanguage) : null,
+  );
+
+  /** Switches tabs; Improve prefills its instructions and leaving clears them. */
+  const chooseMode = (next: Mode) => {
+    if (next === mode) return;
+    if (next === "improve" && currentInstructions.trim() === "") {
+      setCurrentInstructions(improvePrefill);
+    } else if (mode === "improve" && currentInstructions === improvePrefill) {
+      setCurrentInstructions("");
+    }
+    // Output from another mode must never be resumed by Retry.
+    setStreamed("");
+    setMode(next);
+  };
+
+  // The Improve tab disappears when the draft is emptied; fall back to
+  // translating the whole chapter.
+  useEffect(() => {
+    if (mode === "improve" && !canImprove && !running) {
+      if (currentInstructions === improvePrefill) setCurrentInstructions("");
+      setStreamed("");
+      setMode("whole");
+    }
+  }, [canImprove, currentInstructions, improvePrefill, mode, running]);
   const safeProposal = useMemo(
     () => (proposal ? sanitizePreviewHtml(proposal) : ""),
     [proposal],
@@ -498,7 +581,7 @@ export function AiGenerateDialog({
               className="tab"
               aria-pressed={mode === "whole"}
               disabled={running || selectedBusy || editor.appending}
-              onClick={() => setMode("whole")}
+              onClick={() => chooseMode("whole")}
             >
               <Icon name="book" />
               {t("Whole chapter")}
@@ -508,11 +591,23 @@ export function AiGenerateDialog({
               className="tab"
               aria-pressed={mode === "selected"}
               disabled={running || selectedBusy || editor.appending}
-              onClick={() => setMode("selected")}
+              onClick={() => chooseMode("selected")}
             >
               <Icon name="paragraph" />
               {t("Selected paragraphs")}
             </button>
+            {canImprove ? (
+              <button
+                type="button"
+                className="tab"
+                aria-pressed={mode === "improve"}
+                disabled={running || selectedBusy || editor.appending}
+                onClick={() => chooseMode("improve")}
+              >
+                <Icon name="sparkles" />
+                {t("Improve translation")}
+              </button>
+            ) : null}
           </fieldset>
 
           {selection && providers ? (
@@ -525,7 +620,8 @@ export function AiGenerateDialog({
                 · {selection.model} ·{" "}
                 {selection.reasoningEffort ?? t("Default (provider setting)")}
               </span>
-              {project ? (
+              {/* Improving rewrites the target text in place; no direction. */}
+              {project && mode !== "improve" ? (
                 <span>
                   <Icon name="languages" />
                   {formatDirection(project.sourceLanguage, project.targetLanguage)}
@@ -587,7 +683,9 @@ export function AiGenerateDialog({
                       onChange={(event) => setConsent(event.target.checked)}
                     />
                     <span>
-                      {t("Send this chapter’s text to")}{" "}
+                      {mode === "improve"
+                        ? t("Send this chapter’s translation to")
+                        : t("Send this chapter’s text to")}{" "}
                       <strong>
                         {agentLabel(selection.agent, providers.cli, providers.custom)}
                       </strong>{" "}
@@ -597,7 +695,12 @@ export function AiGenerateDialog({
                       .
                     </span>
                   </label>
-                  {phase === "failed" && streamed ? (
+                  {phase === "failed" && mode === "improve" ? (
+                    <p className="dialog__muted">
+                      {t("Retry improves the whole translation again.")}
+                    </p>
+                  ) : null}
+                  {phase === "failed" && mode !== "improve" && streamed ? (
                     <p className="dialog__muted">
                       {t(
                         "Retry keeps complete sections whose formatting matches the source and translates the rest. An unfinished section starts again. If no complete section can be kept, the chapter starts again. A completed result is revalidated without translating again.",
